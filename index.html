@@ -8,104 +8,49 @@
 </head>
 <body>
 <div class="app">
-  <!-- SIDEBAR -->
   <nav class="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-logo">
-        <div class="logo-dot">
-          <svg viewBox="0 0 16 16" fill="white"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a5 5 0 110 10A5 5 0 018 3zm0 2a3 3 0 100 6 3 3 0 000-6z"/></svg>
-        </div>
-        <div>
-          <div class="logo-text">Work Hub</div>
-          <div class="logo-sub">Daily Dashboard</div>
-        </div>
+        <div class="logo-dot"><svg viewBox="0 0 16 16" fill="white"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a5 5 0 110 10A5 5 0 018 3zm0 2a3 3 0 100 6 3 3 0 000-6z"/></svg></div>
+        <div><div class="logo-text">Work Hub</div><div class="logo-sub">Daily Dashboard</div></div>
       </div>
     </div>
-    <button class="nav-item active" onclick="showPage('dashboard')">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h5v5H2V2zm7 0h5v5H9V2zm-7 7h5v5H2V9zm7 0h5v5H9V9z"/></svg>
-      Dashboard
-    </button>
-    <button class="nav-item" onclick="showPage('expenses')">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2c.55 0 1 .45 1 1v1h1.5a.5.5 0 010 1H7.25a.25.25 0 000 .5h1.5C9.99 6.5 11 7.51 11 8.75S9.99 11 8.75 11H8v.5a1 1 0 01-2 0V11H4.5a.5.5 0 010-1h2.25a.25.25 0 000-.5h-1.5C4.01 9.5 3 8.49 3 7.25S4.01 5 5.25 5H6v-.5c0-.55.45-1 1-1z"/></svg>
-      Expenses
-    </button>
-    <button class="nav-item" onclick="showPage('calendar')">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1a1 1 0 012 0v1h4V1a1 1 0 012 0v1h1a2 2 0 012 2v9a2 2 0 01-2 2H3a2 2 0 01-2-2V4a2 2 0 012-2h1V1zm-1 5v7h10V6H3z"/></svg>
-      Calendar
-    </button>
-    <button class="nav-item" onclick="showPage('todos')">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h4v1H5V9z"/></svg>
-      To-Do
-    </button>
-    <button class="nav-item" onclick="showPage('sheets')">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V6L9 1zm0 1.5L13.5 7H9V2.5zM4 3h4v5h5v5H4V3z"/></svg>
-      Sheets
-    </button>
-    <button class="nav-item" onclick="showPage('gmail')">
-      <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h12v10H2V3zm1 1v1.5l5 3.5 5-3.5V4H3zm0 3v5h10V7L8 10 3 7z"/></svg>
-      Gmail
-    </button>
-    <!-- API Key button at bottom of sidebar -->
+    <button class="nav-item active" onclick="showPage('dashboard')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h5v5H2V2zm7 0h5v5H9V2zm-7 7h5v5H2V9zm7 0h5v5H9V9z"/></svg>Dashboard</button>
+    <button class="nav-item" onclick="showPage('expenses')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2c.55 0 1 .45 1 1v1h1.5a.5.5 0 010 1H7.25a.25.25 0 000 .5h1.5C9.99 6.5 11 7.51 11 8.75S9.99 11 8.75 11H8v.5a1 1 0 01-2 0V11H4.5a.5.5 0 010-1h2.25a.25.25 0 000-.5h-1.5C4.01 9.5 3 8.49 3 7.25S4.01 5 5.25 5H6v-.5c0-.55.45-1 1-1z"/></svg>Expenses</button>
+    <button class="nav-item" onclick="showPage('calendar')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1a1 1 0 012 0v1h4V1a1 1 0 012 0v1h1a2 2 0 012 2v9a2 2 0 01-2 2H3a2 2 0 01-2-2V4a2 2 0 012-2h1V1zm-1 5v7h10V6H3z"/></svg>Calendar</button>
+    <button class="nav-item" onclick="showPage('todos')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h4v1H5V9z"/></svg>To-Do</button>
+    <button class="nav-item" onclick="showPage('sheets')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V6L9 1zm0 1.5L13.5 7H9V2.5zM4 3h4v5h5v5H4V3z"/></svg>Sheets</button>
+    <button class="nav-item" onclick="showPage('gmail')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h12v10H2V3zm1 1v1.5l5 3.5 5-3.5V4H3zm0 3v5h10V7L8 10 3 7z"/></svg>Gmail</button>
     <div style="margin-top:auto;padding:12px 16px;border-top:1px solid #eee">
-      <button class="nav-item" onclick="openApiKeyModal()" style="width:100%;padding:8px 0;justify-content:center;gap:6px;font-size:12px;color:#FF3B7F">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="#FF3B7F"><path d="M10 1a5 5 0 013.54 8.54L14 10h1v2h-1v2h-2v-1h-1v-1h-1l-1.46-1.46A5 5 0 1110 1zm0 2a3 3 0 100 6 3 3 0 000-6zm0 1.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3z"/></svg>
-        <span id="api-key-status">Set API Key</span>
+      <button onclick="openApiKeyModal()" style="width:100%;background:none;border:1px solid #eee;border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;justify-content:center">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="#aaa"><path d="M10 1a5 5 0 013.54 8.54L14 10h1v2h-1v2h-2v-1h-1v-1h-1l-1.46-1.46A5 5 0 1110 1zm0 2a3 3 0 100 6 3 3 0 000-6zm0 1.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3z"/></svg>
+        <span id="api-key-status">Set API Key (optional)</span>
       </button>
     </div>
   </nav>
 
-  <!-- MAIN -->
   <main class="main">
 
-    <!-- DASHBOARD -->
     <div id="page-dashboard" class="page active">
       <div class="dash-hero">
-        <div class="hero-text">
-          <h2 id="hero-date">Loading...</h2>
-          <p>Good morning! Here's your daily overview.</p>
-        </div>
+        <div class="hero-text"><h2 id="hero-date">Loading...</h2><p>Good morning! Here's your daily overview.</p></div>
         <a href="https://mail.google.com" class="gmail-btn" target="_blank">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12v10H2V3zm1 1v1.5l5 3.5 5-3.5V4H3zm0 3v5h10V7L8 10 3 7z" fill="#D44638"/></svg>
-          Open Gmail
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12v10H2V3zm1 1v1.5l5 3.5 5-3.5V4H3zm0 3v5h10V7L8 10 3 7z" fill="#D44638"/></svg>Open Gmail
         </a>
       </div>
       <div class="stat-grid">
-        <div class="stat-card">
-          <div><div class="stat-val" id="dash-pending-count">-</div><div class="stat-label">Pending Expenses</div></div>
-          <div class="stat-icon orange"><svg width="18" height="18" viewBox="0 0 16 16" fill="#b45309"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm.5 3v4.5l3.5 2-.5.87-4-2.37V4h1z"/></svg></div>
-        </div>
-        <div class="stat-card">
-          <div><div class="stat-val" id="dash-meetings-count">-</div><div class="stat-label">Meetings Today</div></div>
-          <div class="stat-icon pink"><svg width="18" height="18" viewBox="0 0 16 16" fill="#be185d"><path d="M4 1a1 1 0 012 0v1h4V1a1 1 0 012 0v1h1a2 2 0 012 2v9a2 2 0 01-2 2H3a2 2 0 01-2-2V4a2 2 0 012-2h1V1zm-1 5v7h10V6H3z"/></svg></div>
-        </div>
-        <div class="stat-card">
-          <div><div class="stat-val" id="dash-todo-progress">-</div><div class="stat-label">Tasks Done</div></div>
-          <div class="stat-icon green"><svg width="18" height="18" viewBox="0 0 16 16" fill="#15803d"><path d="M13.7 4.3l-7 7-1.4 1.4-1.4-1.4-2-2 1.4-1.4L5.3 10l6.3-6.3 1.4 1.3z"/></svg></div>
-        </div>
+        <div class="stat-card"><div><div class="stat-val" id="dash-pending-count">-</div><div class="stat-label">Pending Expenses</div></div><div class="stat-icon orange"><svg width="18" height="18" viewBox="0 0 16 16" fill="#b45309"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm.5 3v4.5l3.5 2-.5.87-4-2.37V4h1z"/></svg></div></div>
+        <div class="stat-card"><div><div class="stat-val" id="dash-meetings-count">-</div><div class="stat-label">Meetings Today</div></div><div class="stat-icon pink"><svg width="18" height="18" viewBox="0 0 16 16" fill="#be185d"><path d="M4 1a1 1 0 012 0v1h4V1a1 1 0 012 0v1h1a2 2 0 012 2v9a2 2 0 01-2 2H3a2 2 0 01-2-2V4a2 2 0 012-2h1V1zm-1 5v7h10V6H3z"/></svg></div></div>
+        <div class="stat-card"><div><div class="stat-val" id="dash-todo-progress">-</div><div class="stat-label">Tasks Done</div></div><div class="stat-icon green"><svg width="18" height="18" viewBox="0 0 16 16" fill="#15803d"><path d="M13.7 4.3l-7 7-1.4 1.4-1.4-1.4-2-2 1.4-1.4L5.3 10l6.3-6.3 1.4 1.3z"/></svg></div></div>
       </div>
       <div class="home-grid">
-        <div class="home-card">
-          <div class="home-card-title">Upcoming Meetings</div>
-          <div id="dash-meetings-list" class="meeting-list"></div>
-        </div>
-        <div class="home-card">
-          <div class="home-card-title">To-Do Progress</div>
-          <div class="progress-bar"><div class="progress-fill" id="dash-progress-bar" style="width:0%"></div></div>
-          <div class="progress-label"><span id="dash-progress-text">0 of 0 completed</span><span id="dash-progress-pct">0%</span></div>
-          <div style="margin-top:12px" id="dash-todos-preview"></div>
-        </div>
-        <div class="home-card">
-          <div class="home-card-title">Recent Expenses</div>
-          <div id="dash-expenses-list"></div>
-        </div>
-        <div class="home-card">
-          <div class="home-card-title">Google Sheets</div>
-          <div id="dash-sheets-list"></div>
-        </div>
+        <div class="home-card"><div class="home-card-title">Upcoming Meetings</div><div id="dash-meetings-list" class="meeting-list"></div></div>
+        <div class="home-card"><div class="home-card-title">To-Do Progress</div><div class="progress-bar"><div class="progress-fill" id="dash-progress-bar" style="width:0%"></div></div><div class="progress-label"><span id="dash-progress-text">0 of 0 completed</span><span id="dash-progress-pct">0%</span></div><div style="margin-top:12px" id="dash-todos-preview"></div></div>
+        <div class="home-card"><div class="home-card-title">Recent Expenses</div><div id="dash-expenses-list"></div></div>
+        <div class="home-card"><div class="home-card-title">Google Sheets</div><div id="dash-sheets-list"></div></div>
       </div>
     </div>
 
-    <!-- EXPENSES -->
     <div id="page-expenses" class="page">
       <div class="page-header">
         <div><div class="page-title">Expense Tracker</div><div class="page-sub">Track &amp; manage company reimbursements</div></div>
@@ -125,18 +70,10 @@
             <button class="filter-tab" onclick="filterExp('reimbursed',this)">Reimbursed</button>
           </div>
         </div>
-        <table>
-          <thead><tr>
-            <th style="width:40px">Status</th>
-            <th>Receipt / Name</th><th>Purpose</th><th>Amount</th><th>Request Date</th><th>Receipt File</th>
-            <th style="width:36px"></th>
-          </tr></thead>
-          <tbody id="expense-table-body"></tbody>
-        </table>
+        <table><thead><tr><th style="width:40px">Status</th><th>Name</th><th>Purpose</th><th>Amount</th><th>Date</th><th>Receipt</th><th style="width:36px"></th></tr></thead><tbody id="expense-table-body"></tbody></table>
       </div>
     </div>
 
-    <!-- CALENDAR -->
     <div id="page-calendar" class="page">
       <div class="page-header">
         <div><div class="page-title">Calendar</div><div class="page-sub">Manage your meetings and schedule</div></div>
@@ -158,23 +95,14 @@
           <div id="day-meetings" class="meeting-list"><div class="empty-hint">Click a date to see meetings</div></div>
         </div>
       </div>
-      <div class="card" style="margin-top:16px">
-        <div class="card-header"><div class="card-title">All Upcoming Meetings</div></div>
-        <div id="all-meetings-list" class="meeting-list"></div>
-      </div>
+      <div class="card" style="margin-top:16px"><div class="card-header"><div class="card-title">All Upcoming Meetings</div></div><div id="all-meetings-list" class="meeting-list"></div></div>
     </div>
 
-    <!-- TO-DO -->
     <div id="page-todos" class="page">
-      <div class="page-header">
-        <div><div class="page-title">To-Do List</div><div class="page-sub">Keep track of your tasks</div></div>
-      </div>
+      <div class="page-header"><div><div class="page-title">To-Do List</div><div class="page-sub">Keep track of your tasks</div></div></div>
       <div class="card">
         <div style="margin-bottom:16px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <div class="card-title">Progress</div>
-            <div id="todo-progress-label" style="font-size:13px;color:#888">0/0 completed</div>
-          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="card-title">Progress</div><div id="todo-progress-label" style="font-size:13px;color:#888">0/0 completed</div></div>
           <div class="progress-bar"><div class="progress-fill" id="todo-progress-fill" style="width:0%"></div></div>
         </div>
         <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -185,26 +113,16 @@
       </div>
     </div>
 
-    <!-- SHEETS -->
     <div id="page-sheets" class="page">
-      <div class="page-header">
-        <div><div class="page-title">Google Sheets</div><div class="page-sub">Quick access to your spreadsheets</div></div>
-        <button class="btn-pink" onclick="openSheetModal()">+ Add Sheet</button>
-      </div>
+      <div class="page-header"><div><div class="page-title">Google Sheets</div><div class="page-sub">Quick access to your spreadsheets</div></div><button class="btn-pink" onclick="openSheetModal()">+ Add Sheet</button></div>
       <div class="card">
-        <div class="search-bar">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="#888"><path d="M11.7 10.3a6 6 0 10-1.4 1.4l3 3 1.4-1.4-3-3zM7 11A4 4 0 117 3a4 4 0 010 8z"/></svg>
-          <input id="sheet-search" placeholder="Search your sheets..." oninput="renderSheets()" />
-        </div>
+        <div class="search-bar"><svg width="14" height="14" viewBox="0 0 16 16" fill="#888"><path d="M11.7 10.3a6 6 0 10-1.4 1.4l3 3 1.4-1.4-3-3zM7 11A4 4 0 117 3a4 4 0 010 8z"/></svg><input id="sheet-search" placeholder="Search your sheets..." oninput="renderSheets()" /></div>
         <div id="sheets-list" class="sheets-list"></div>
       </div>
     </div>
 
-    <!-- GMAIL -->
     <div id="page-gmail" class="page">
-      <div class="page-header">
-        <div><div class="page-title">Gmail</div><div class="page-sub">Your inbox</div></div>
-      </div>
+      <div class="page-header"><div><div class="page-title">Gmail</div><div class="page-sub">Your inbox</div></div></div>
       <div class="card" style="padding:0;overflow:hidden">
         <div style="padding:12px 16px;border-bottom:1px solid #eee;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span style="font-size:13px;color:#888">Tabs:</span>
@@ -224,20 +142,16 @@
 <!-- API KEY MODAL -->
 <div id="apikey-modal" class="modal-overlay" onclick="if(event.target===this)closeApiKeyModal()">
   <div class="modal">
-    <div class="modal-title">🔑 Anthropic API Key</div>
-    <p style="font-size:13px;color:#555;margin-bottom:16px;line-height:1.6">
-      To use AI receipt scanning, enter your Anthropic API key below.<br>
-      It is saved <strong>only in your browser</strong> (localStorage) and never sent anywhere except directly to Anthropic.
-    </p>
+    <div class="modal-title">API Key (optional)</div>
+    <p style="font-size:13px;color:#555;margin-bottom:4px;line-height:1.6">Adding an Anthropic API key enables <strong>AI auto-fill</strong> when you upload a receipt. Without it, you can still upload receipts — they'll be saved as images and you fill the fields manually.</p>
+    <p style="font-size:12px;color:#999;margin-bottom:14px">Your key is saved <strong>only in this browser</strong>, never shared.</p>
     <div class="form-group" style="margin-bottom:8px">
       <label class="form-label">API Key</label>
       <input class="form-input" id="apikey-input" type="password" placeholder="sk-ant-..." />
     </div>
-    <p style="font-size:11px;color:#999;margin-bottom:16px">
-      Get your key at <a href="https://console.anthropic.com" target="_blank" style="color:#FF3B7F">console.anthropic.com</a> → API Keys
-    </p>
+    <p style="font-size:11px;color:#bbb;margin-bottom:16px">Get one free at <a href="https://console.anthropic.com" target="_blank" style="color:#FF3B7F">console.anthropic.com</a> → API Keys</p>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="clearApiKey()" style="color:#e53e3e">Remove Key</button>
+      <button class="btn-cancel" onclick="clearApiKey()" style="color:#e53e3e;border-color:#fcc">Remove Key</button>
       <button class="btn-cancel" onclick="closeApiKeyModal()">Cancel</button>
       <button class="btn-pink" onclick="saveApiKey()">Save Key</button>
     </div>
@@ -248,12 +162,10 @@
 <div id="expense-modal" class="modal-overlay" onclick="if(event.target===this)closeExpenseModal()">
   <div class="modal">
     <div class="modal-title">Add Expense</div>
-    <div class="upload-area" id="upload-area" onclick="document.getElementById('receipt-file').click()">
-      <div class="upload-icon">
-        <svg width="18" height="18" viewBox="0 0 16 16" fill="#FF3B7F"><path d="M8 1l4 4H9v5H7V5H4l4-4zM2 12h12v2H2v-2z"/></svg>
-      </div>
+    <div class="upload-area" id="upload-area" onclick="document.getElementById('receipt-file').click()" style="cursor:pointer">
+      <div id="upload-icon-wrap" class="upload-icon"><svg width="18" height="18" viewBox="0 0 16 16" fill="#FF3B7F"><path d="M8 1l4 4H9v5H7V5H4l4-4zM2 12h12v2H2v-2z"/></svg></div>
       <div class="upload-text" id="upload-text">Upload Receipt (screenshot or photo)</div>
-      <div class="upload-sub">PNG, JPG, WEBP or PDF &mdash; AI will auto-fill fields</div>
+      <div class="upload-sub" id="upload-sub-text">PNG, JPG, WEBP or PDF — works without API key</div>
     </div>
     <input type="file" id="receipt-file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onchange="processReceipt(this)" />
     <div class="ai-processing" id="ai-processing"></div>
