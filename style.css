@@ -1,63 +1,70 @@
-/* Custom Scrollbar for that clean look */
-::-webkit-scrollbar {
-    width: 6px;
-}
-::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-::-webkit-scrollbar-thumb {
-    background: #ff85a2;
-    border-radius: 10px;
+/* Sidebar Buttons */
+.nav-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
-/* Sidebar Navigation Styling */
-.nav-btn-active {
-    background-color: #fff1f2; /* Light pink bg */
-    border-left: 4px solid #ff85a2; /* Darker pink accent */
-    color: #ff85a2;
+.nav-btn:hover {
+    background-color: #fce7f3; /* Light pink */
+}
+
+.active-nav {
+    background-color: #fce7f3 !important;
+    color: #db2777 !important;
     font-weight: 700;
 }
 
-/* Progress Bar Customization */
-progress {
-    appearance: none;
-}
-progress::-webkit-progress-bar {
-    background-color: #eee;
-    border-radius: 20px;
-}
-progress::-webkit-progress-value {
-    background: linear-gradient(to right, #ff85a2, #ffacbd);
-    border-radius: 20px;
-    transition: width 0.5s ease;
-}
-
-/* Card Hover Effects */
-section > div {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-section > div:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(255, 133, 162, 0.1);
-}
-
-/* FullCalendar Customization to match Pink Theme */
-.fc-event {
-    background-color: #ff85a2 !important;
-    border: none !important;
-    padding: 2px 5px;
+/* Gmail Button */
+.gmail-btn {
+    background-color: #ec4899;
+    color: white;
+    padding: 12px;
+    border-radius: 12px;
+    font-weight: bold;
     cursor: pointer;
+    transition: transform 0.2s;
 }
 
-.fc-daygrid-day.fc-day-today {
-    background-color: #fff1f2 !important;
+.gmail-btn:hover {
+    transform: scale(1.02);
+    background-color: #db2777;
 }
 
-.fc-button-primary {
-    background-color: #ff85a2 !important;
-    border-color: #ff85a2 !important;
+/* Cards & Inputs */
+.stat-card {
+    background: white;
+    padding: 20px;
+    border-radius: 15px;
+    border: 1px solid #f3f4f6;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
 }
+
+.input-field {
+    border: 1px solid #f3f4f6;
+    padding: 8px;
+    border-radius: 8px;
+    outline: none;
+}
+
+.input-field:focus {
+    border-color: #f472b6;
+    box-shadow: 0 0 0 2px #fbcfe8;
+}
+
+/* Progress Bar */
+progress {
+    height: 12px;
+    border-radius: 10px;
+    overflow: hidden;
+}
+progress::-webkit-progress-bar { background-color: #f3f4f6; }
+progress::-webkit-progress-value { background-color: #ec4899; }
 
 .fc-button-primary:hover {
     background-color: #f47291 !important;
