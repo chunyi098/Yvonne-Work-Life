@@ -9,46 +9,55 @@
 </head>
 <body class="bg-gray-50 text-gray-800">
     <div class="flex h-screen">
-        <nav class="w-64 bg-white border-r p-6 space-y-4">
+        <nav class="w-64 bg-white border-r p-6 flex flex-col">
             <h1 class="text-2xl font-bold text-pink-500 mb-8">Work Hub</h1>
-            <button onclick="showSection('dashboard')" class="block w-full text-left p-2 hover:bg-pink-50 rounded">Dashboard</button>
-            <button onclick="showSection('expenses')" class="block w-full text-left p-2 hover:bg-pink-50 rounded">Expenses</button>
-            <button onclick="showSection('calendar')" class="block w-full text-left p-2 hover:bg-pink-50 rounded">Calendar</button>
-            <button onclick="showSection('sheets')" class="block w-full text-left p-2 hover:bg-pink-50 rounded">Google Sheets</button>
-            <button onclick="window.open('https://mail.google.com')" class="mt-10 w-full bg-pink-500 text-white p-2 rounded shadow">Open Gmail</button>
+            <div class="space-y-4 flex-1">
+                <button onclick="showSection('todo-sec')" class="block w-full text-left p-2 hover:bg-pink-50 rounded font-medium">Dashboard (To-Do)</button>
+                <button onclick="showSection('calendar-sec')" class="block w-full text-left p-2 hover:bg-pink-50 rounded font-medium">Calendar</button>
+                <button onclick="showSection('expenses-sec')" class="block w-full text-left p-2 hover:bg-pink-50 rounded font-medium">Expenses</button>
+                <button onclick="showSection('sheets-sec')" class="block w-full text-left p-2 hover:bg-pink-50 rounded font-medium">Google Sheets</button>
+            </div>
+            
+            <button onclick="window.open('https://mail.google.com')" class="mt-auto w-full bg-pink-500 text-white p-3 rounded-xl shadow-lg hover:bg-pink-600 transition font-bold">
+                Open Gmail
+            </button>
         </nav>
 
         <main class="flex-1 p-10 overflow-y-auto">
-            <section id="expenses" class="hidden space-y-6">
+            
+            <section id="todo-sec" class="space-y-6">
+                <h2 class="text-3xl font-bold">My Progress</h2>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-pink-100">
+                    <label class="block text-sm font-bold text-gray-500 mb-2">Completion Rate</label>
+                    <progress id="todoBar" value="0" max="100" class="w-full h-4 rounded-full overflow-hidden [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:bg-pink-500"></progress>
+                    <div class="mt-6 flex gap-2">
+                        <input type="text" id="taskInput" placeholder="Add a new task..." class="flex-1 border p-2 rounded-lg outline-none focus:ring-2 focus:ring-pink-300">
+                        <button onclick="addTask()" class="bg-pink-500 text-white px-4 py-2 rounded-lg font-bold">Add</button>
+                    </div>
+                    <ul id="taskList" class="mt-4 space-y-2"></ul>
+                </div>
+            </section>
+
+            <section id="expenses-sec" class="hidden space-y-6">
                 <h2 class="text-3xl font-bold">Expense Tracker</h2>
                 <div class="bg-white p-6 rounded-xl shadow-sm border">
-                    <input type="file" id="receiptUpload" accept="image/*" class="mb-4">
+                    <label class="block font-medium mb-2">Upload Receipt (Auto-scan)</label>
+                    <input type="file" id="receiptUpload" accept="image/*" class="mb-4 block w-full text-sm text-gray-500">
                     <div id="expenseForm" class="grid grid-cols-2 gap-4">
                         <input type="text" id="expCompany" placeholder="Company Name" class="border p-2 rounded">
                         <input type="number" id="expAmount" placeholder="Amount" class="border p-2 rounded">
                         <input type="text" id="expPurpose" placeholder="Purpose" class="border p-2 rounded">
-                        <button onclick="addExpense()" class="bg-green-500 text-white p-2 rounded">Save Expense</button>
+                        <button onclick="addExpense()" class="bg-green-500 text-white p-2 rounded font-bold">Save Expense</button>
                     </div>
                 </div>
             </section>
 
             <section id="calendar-sec" class="hidden">
-                <div class="flex justify-between mb-4">
-                    <input type="text" id="calSearch" placeholder="Search events..." onkeyup="filterCal()" class="border p-2 rounded">
-                    <select id="monthJump" onchange="jumpCal()" class="border p-2 rounded"></select>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold">Meetings</h2>
+                    <div class="flex gap-2">
+                        <input type="text" id="calSearch" placeholder="Search events..." onkeyup="filterCal()" class="border p-2 rounded text-sm">
+                        <select id="monthJump" onchange="jumpCal()" class="border p-2 rounded text-sm"></select>
+                    </div>
                 </div>
-                <div id="calendar" class="bg-white p-4 rounded-xl shadow"></div>
-            </section>
-
-            <section id="sheets" class="hidden">
-                <h2 class="text-2xl font-bold mb-4">My Google Sheets</h2>
-                <iframe src="YOUR_GOOGLE_SHEET_EMBED_LINK" class="w-full h-[600px] border rounded"></iframe>
-            </section>
-        </main>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="script.js"></script>
-</body>
-</html>
+                <div id="calendar" class="bg-white p-4 rounded-xl
