@@ -18,7 +18,6 @@
                     <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Workspace v2.0</p>
                 </div>
             </div>
-            
             <div class="space-y-3 flex-1">
                 <button onclick="showSection('dash-sec')" class="nav-btn active-nav">Dashboard</button>
                 <button onclick="showSection('exp-sec')" class="nav-btn">Expenses</button>
@@ -26,89 +25,83 @@
                 <button onclick="showSection('todo-sec')" class="nav-btn">To-Do List</button>
                 <button onclick="showSection('sheet-sec')" class="nav-btn">Google Sheets</button>
             </div>
-
-            <button onclick="window.open('https://mail.google.com')" class="gmail-btn">
-                Open Gmail
-            </button>
+            <button onclick="window.open('https://mail.google.com')" class="gmail-btn">Open Gmail</button>
         </nav>
 
         <main class="flex-1 overflow-y-auto p-12">
+            
             <section id="dash-sec" class="space-y-10">
                 <header>
-                    <h2 class="text-4xl font-black tracking-tight">Good Afternoon</h2>
+                    <h2 class="text-4xl font-black">Good Afternoon</h2>
                     <p class="text-gray-400 font-semibold mt-2">Thursday, April 16, 2026</p>
                 </header>
-
                 <div class="grid grid-cols-4 gap-6">
-                    <div class="stat-card"><span>2</span>Pending Expenses</div>
+                    <div class="stat-card"><span id="dash-exp-count">0</span>Pending Expenses</div>
                     <div class="stat-card"><span>1</span>Meeting Today</div>
-                    <div class="stat-card"><span>1/4</span>Tasks Done</div>
-                    <div class="stat-card"><span>0</span>Saved Sheets</div>
+                    <div class="stat-card"><span id="dash-todo-count">0/0</span>Tasks Done</div>
+                    <div class="stat-card"><span id="dash-sheet-count">0</span>Saved Sheets</div>
                 </div>
-
-                <div class="grid grid-cols-2 gap-8">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div class="card p-8">
-                        <h3 class="font-bold text-lg mb-6 flex items-center gap-3">
-                            <span class="w-1.5 h-6 bg-blue-500 rounded-full"></span> Upcoming Meetings
-                        </h3>
-                        <div class="space-y-4">
-                            <div class="p-5 bg-blue-50/40 border border-blue-100 rounded-2xl flex justify-between items-center group cursor-pointer hover:bg-blue-50 transition-colors">
-                                <div>
-                                    <p class="font-bold text-blue-900">1-on-1 with Manager</p>
-                                    <p class="text-xs text-blue-400 mt-1 font-medium">Tomorrow • 11:00 AM - 11:30 AM</p>
-                                </div>
-                                <span class="text-blue-300 group-hover:text-blue-500 transition-colors">→</span>
-                            </div>
+                        <h3 class="font-bold text-lg mb-6 flex items-center gap-3"><span class="w-1.5 h-6 bg-blue-500 rounded-full"></span> Upcoming Meetings</h3>
+                        <div class="p-5 bg-blue-50/40 border border-blue-100 rounded-2xl flex justify-between items-center group cursor-pointer hover:bg-blue-50 transition-all">
+                            <div><p class="font-bold text-blue-900">1-on-1 with Manager</p><p class="text-xs text-blue-400 mt-1 font-medium">Tomorrow • 11:00 AM</p></div>
+                            <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-400 shadow-sm group-hover:bg-blue-500 group-hover:text-white transition-all">→</div>
                         </div>
                     </div>
                     <div class="card p-8">
-                        <h3 class="font-bold text-lg mb-6 flex items-center gap-3">
-                            <span class="w-1.5 h-6 bg-pink-500 rounded-full"></span> Task Completion
-                        </h3>
-                        <div class="flex items-center gap-6">
-                            <div class="flex-1">
-                                <progress id="dashProgress" value="25" max="100" class="w-full h-3"></progress>
+                        <h3 class="font-bold text-lg mb-6 flex items-center gap-3"><span class="w-1.5 h-6 bg-pink-500 rounded-full"></span> Progress</h3>
+                        <div class="flex flex-col items-center">
+                            <div class="relative w-32 h-32 mb-4">
+                                <svg class="w-full h-full" viewBox="0 0 36 36"><path class="text-gray-100" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" /><path id="circle-progress" class="text-pink-500" stroke-width="3" stroke-dasharray="0, 100" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" /></svg>
+                                <div class="absolute inset-0 flex items-center justify-center font-black text-xl" id="perc-text">0%</div>
                             </div>
-                            <span class="font-black text-2xl text-pink-500">25%</span>
                         </div>
-                        <p class="text-sm text-gray-400 mt-4 font-medium">Keep it up! You're almost at your daily goal.</p>
                     </div>
                 </div>
             </section>
 
             <section id="exp-sec" class="hidden space-y-8">
-                <div class="flex justify-between items-end">
-                    <div>
-                        <h2 class="text-3xl font-black">Expense Tracker</h2>
-                        <p class="text-gray-400 font-medium mt-1">Manage and track your business claims</p>
+                <header class="flex justify-between items-end">
+                    <div><h2 class="text-3xl font-black">Expense Tracker</h2><p class="text-gray-400 font-medium">Manage your claims</p></div>
+                </header>
+                <div class="card p-6 bg-white mb-6">
+                    <div class="grid grid-cols-3 gap-4">
+                        <input type="text" id="expPurp" placeholder="Purpose (e.g. Taxi)" class="input-field">
+                        <input type="number" id="expAmt" placeholder="Amount ($)" class="input-field">
+                        <button onclick="addExpense()" class="bg-pink-500 text-white rounded-xl font-bold">Add Expense</button>
                     </div>
-                    <button class="bg-[#EC4899] text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-lg shadow-pink-100 hover:scale-105 transition-transform">Add New</button>
                 </div>
                 <div class="card overflow-hidden">
                     <table class="w-full text-left">
-                        <thead class="bg-gray-50/50 border-b border-gray-100">
+                        <thead class="bg-gray-50 border-b">
                             <tr>
-                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Purpose</th>
-                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</th>
-                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
+                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase">Status</th>
+                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase">Purpose</th>
+                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase">Amount</th>
+                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase text-right">Action</th>
                             </tr>
                         </thead>
-                        <tbody id="expenseList">
-                            <tr class="border-b border-gray-50 last:border-0 hover:bg-gray-50/30 transition-colors">
-                                <td class="p-5"><span class="px-4 py-1.5 bg-pink-50 text-pink-500 text-[10px] font-black rounded-full border border-pink-100">PENDING</span></td>
-                                <td class="p-5 font-bold text-sm">Grab Taxi (Client Site)</td>
-                                <td class="p-5 font-black text-sm">$25.50</td>
-                                <td class="p-5 text-xs text-gray-400 font-bold">APR 10, 2026</td>
-                            </tr>
-                        </tbody>
+                        <tbody id="expenseList"></tbody>
                     </table>
                 </div>
             </section>
 
-            <section id="cal-sec" class="hidden"><div id="calendar" class="card p-8"></div></section>
-            <section id="todo-sec" class="hidden"><div class="card p-8"><h2 class="text-2xl font-bold mb-4">To-Do</h2><ul id="taskList"></ul></div></section>
-            <section id="sheet-sec" class="hidden"><div class="card p-8"><h2 class="text-2xl font-bold">Sheets</h2></div></section>
+            <section id="todo-sec" class="hidden space-y-8">
+                <header><h2 class="text-3xl font-black">To-Do List</h2><p class="text-gray-400 font-medium">Daily tasks</p></header>
+                <div class="card p-8">
+                    <div class="flex gap-4 mb-8">
+                        <input type="text" id="todoInput" placeholder="Enter new task..." class="input-field flex-1">
+                        <button onclick="addTodo()" class="bg-pink-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-pink-100">Add Task</button>
+                    </div>
+                    <div id="todoContainer" class="space-y-4"></div>
+                </div>
+            </section>
+
+            <section id="cal-sec" class="hidden space-y-8">
+                <header><h2 class="text-3xl font-black">Calendar</h2></header>
+                <div id="calendar" class="card p-8"></div>
+            </section>
 
         </main>
     </div>
