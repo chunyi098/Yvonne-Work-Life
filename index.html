@@ -1,1 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LifeFlow Work Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="flex h-screen">
+        <nav class="w-64 bg-white border-r p-6 space-y-4">
+            <h1 class="text-2xl font-bold text-pink-500 mb-8">Work Hub</h1>
+            <button onclick="showSection('dashboard')" class="block w-full text-left p-2 hover:bg-pink-50 rounded">Dashboard</button>
+            <button onclick="showSection('expenses')" class="block w-full text-left p-2 hover:bg-pink-50 rounded">Expenses</button>
+            <button onclick="showSection('calendar')" class="block w-full text-left p-2 hover:bg-pink-50 rounded">Calendar</button>
+            <button onclick="showSection('sheets')" class="block w-full text-left p-2 hover:bg-pink-50 rounded">Google Sheets</button>
+            <button onclick="window.open('https://mail.google.com')" class="mt-10 w-full bg-pink-500 text-white p-2 rounded shadow">Open Gmail</button>
+        </nav>
 
+        <main class="flex-1 p-10 overflow-y-auto">
+            <section id="expenses" class="hidden space-y-6">
+                <h2 class="text-3xl font-bold">Expense Tracker</h2>
+                <div class="bg-white p-6 rounded-xl shadow-sm border">
+                    <input type="file" id="receiptUpload" accept="image/*" class="mb-4">
+                    <div id="expenseForm" class="grid grid-cols-2 gap-4">
+                        <input type="text" id="expCompany" placeholder="Company Name" class="border p-2 rounded">
+                        <input type="number" id="expAmount" placeholder="Amount" class="border p-2 rounded">
+                        <input type="text" id="expPurpose" placeholder="Purpose" class="border p-2 rounded">
+                        <button onclick="addExpense()" class="bg-green-500 text-white p-2 rounded">Save Expense</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="calendar-sec" class="hidden">
+                <div class="flex justify-between mb-4">
+                    <input type="text" id="calSearch" placeholder="Search events..." onkeyup="filterCal()" class="border p-2 rounded">
+                    <select id="monthJump" onchange="jumpCal()" class="border p-2 rounded"></select>
+                </div>
+                <div id="calendar" class="bg-white p-4 rounded-xl shadow"></div>
+            </section>
+
+            <section id="sheets" class="hidden">
+                <h2 class="text-2xl font-bold mb-4">My Google Sheets</h2>
+                <iframe src="YOUR_GOOGLE_SHEET_EMBED_LINK" class="w-full h-[600px] border rounded"></iframe>
+            </section>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
