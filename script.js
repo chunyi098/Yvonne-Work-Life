@@ -1,3 +1,20 @@
+function showSection(id) {
+    // 1. Select all section elements in the main content area
+    const sections = document.querySelectorAll('main section');
+    
+    // 2. Hide every single one of them
+    sections.forEach(section => {
+        section.classList.add('hidden');
+    });
+
+    // 3. Find the one specific section we want and show it
+    const activeSection = document.getElementById(id);
+    if (activeSection) {
+        activeSection.classList.remove('hidden');
+    } else {
+        console.error("Could not find section with ID:", id);
+    }
+}
 // INITIALIZE DATA
 let myTasks = JSON.parse(localStorage.getItem('tasks')) || [];
 let mySheets = JSON.parse(localStorage.getItem('sheets')) || [];
