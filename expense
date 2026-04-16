@@ -1,1 +1,41 @@
-
+{
+  "name": "Expense",
+  "type": "object",
+  "properties": {
+    "receipt_name": {
+      "type": "string",
+      "description": "Name of the receipt or vendor"
+    },
+    "purpose": {
+      "type": "string",
+      "description": "Purpose of the purchase"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Amount of the expense"
+    },
+    "currency": {
+      "type": "string",
+      "default": "SGD",
+      "description": "Currency of the expense"
+    },
+    "request_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date when reimbursement was requested"
+    },
+    "reimbursed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the expense has been reimbursed"
+    },
+    "receipt_url": {
+      "type": "string",
+      "description": "URL of the uploaded receipt file"
+    }
+  },
+  "required": [
+    "receipt_name",
+    "amount"
+  ]
+}
