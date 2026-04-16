@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="style.css">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LifeFlow Work Hub</title>
+    <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css" rel="stylesheet">
 </head>
@@ -13,52 +13,82 @@
         <nav class="w-64 bg-white border-r p-6 flex flex-col">
             <h1 class="text-2xl font-bold text-pink-500 mb-8">Work Hub</h1>
             <div class="space-y-4 flex-1">
-                <button onclick="showSection('todo-sec')" class="block w-full text-left p-2 hover:bg-pink-50 rounded font-medium">Dashboard (To-Do)</button>
-                <button onclick="showSection('calendar-sec')" class="block w-full text-left p-2 hover:bg-pink-50 rounded font-medium">Calendar</button>
-                <button onclick="showSection('expenses-sec')" class="block w-full text-left p-2 hover:bg-pink-50 rounded font-medium">Expenses</button>
-                <button onclick="showSection('sheets-sec')" class="block w-full text-left p-2 hover:bg-pink-50 rounded font-medium">Google Sheets</button>
+                <button type="button" onclick="showSection('dashboard-sec')" class="nav-btn active-nav">Dashboard</button>
+                <button type="button" onclick="showSection('expenses-sec')" class="nav-btn">Expenses</button>
+                <button type="button" onclick="showSection('calendar-sec')" class="nav-btn">Calendar</button>
+                <button type="button" onclick="showSection('todo-sec')" class="nav-btn">To-Do List</button>
+                <button type="button" onclick="showSection('sheets-sec')" class="nav-btn">Google Sheets</button>
             </div>
-            
-            <button onclick="window.open('https://mail.google.com')" class="mt-auto w-full bg-pink-500 text-white p-3 rounded-xl shadow-lg hover:bg-pink-600 transition font-bold">
+            <button type="button" onclick="window.open('https://mail.google.com', '_blank')" class="gmail-btn">
                 Open Gmail
             </button>
         </nav>
 
         <main class="flex-1 p-10 overflow-y-auto">
             
-            <section id="todo-sec" class="space-y-6">
-                <h2 class="text-3xl font-bold">My Progress</h2>
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-pink-100">
-                    <label class="block text-sm font-bold text-gray-500 mb-2">Completion Rate</label>
-                    <progress id="todoBar" value="0" max="100" class="w-full h-4 rounded-full overflow-hidden [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:bg-pink-500"></progress>
-                    <div class="mt-6 flex gap-2">
-                        <input type="text" id="taskInput" placeholder="Add a new task..." class="flex-1 border p-2 rounded-lg outline-none focus:ring-2 focus:ring-pink-300">
-                        <button onclick="addTask()" class="bg-pink-500 text-white px-4 py-2 rounded-lg font-bold">Add</button>
-                    </div>
-                    <ul id="taskList" class="mt-4 space-y-2"></ul>
+            <section id="dashboard-sec" class="space-y-6">
+                <h2 class="text-3xl font-bold">Good Afternoon</h2>
+                <p class="text-gray-500">Welcome back to your workspace.</p>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="stat-card"><strong>2</strong> Pending Expenses</div>
+                    <div class="stat-card"><strong>1</strong> Meeting Today</div>
+                    <div class="stat-card"><strong>0</strong> Sheets Saved</div>
                 </div>
             </section>
 
             <section id="expenses-sec" class="hidden space-y-6">
                 <h2 class="text-3xl font-bold">Expense Tracker</h2>
-                <div class="bg-white p-6 rounded-xl shadow-sm border">
-                    <label class="block font-medium mb-2">Upload Receipt (Auto-scan)</label>
-                    <input type="file" id="receiptUpload" accept="image/*" class="mb-4 block w-full text-sm text-gray-500">
-                    <div id="expenseForm" class="grid grid-cols-2 gap-4">
-                        <input type="text" id="expCompany" placeholder="Company Name" class="border p-2 rounded">
-                        <input type="number" id="expAmount" placeholder="Amount" class="border p-2 rounded">
-                        <input type="text" id="expPurpose" placeholder="Purpose" class="border p-2 rounded">
-                        <button onclick="addExpense()" class="bg-green-500 text-white p-2 rounded font-bold">Save Expense</button>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <input type="file" id="receiptUpload" accept="image/*" class="mb-4 text-sm">
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" id="expCompany" placeholder="Company Name" class="input-field">
+                        <input type="number" id="expAmount" placeholder="Amount" class="input-field">
+                        <input type="text" id="expPurpose" placeholder="Purpose" class="input-field">
+                        <button onclick="addExpense()" class="bg-pink-500 text-white p-2 rounded-lg font-bold">Save Expense</button>
                     </div>
                 </div>
             </section>
 
             <section id="calendar-sec" class="hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-bold">Meetings</h2>
+                    <h2 class="text-2xl font-bold text-gray-800">Calendar</h2>
                     <div class="flex gap-2">
-                        <input type="text" id="calSearch" placeholder="Search events..." onkeyup="filterCal()" class="border p-2 rounded text-sm">
-                        <select id="monthJump" onchange="jumpCal()" class="border p-2 rounded text-sm"></select>
+                        <input type="text" id="calSearch" placeholder="Search..." onkeyup="filterCal()" class="border p-2 rounded-lg">
+                        <select id="monthJump" onchange="jumpCal()" class="border p-2 rounded-lg"></select>
                     </div>
                 </div>
-                <div id="calendar" class="bg-white p-4 rounded-xl
+                <div id="calendar" class="bg-white p-4 rounded-xl shadow border"></div>
+            </section>
+
+            <section id="todo-sec" class="hidden space-y-6">
+                <h2 class="text-3xl font-bold">To-Do List</h2>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-pink-100">
+                    <progress id="todoBar" value="0" max="100" class="w-full"></progress>
+                    <div class="mt-4 flex gap-2">
+                        <input type="text" id="taskInput" placeholder="Add a task..." class="input-field">
+                        <button onclick="addTask()" class="bg-pink-500 text-white px-4 py-2 rounded-lg font-bold">Add</button>
+                    </div>
+                    <ul id="taskList" class="mt-6 space-y-2"></ul>
+                </div>
+            </section>
+
+            <section id="sheets-sec" class="hidden space-y-6">
+                <h2 class="text-3xl font-bold">Google Sheets</h2>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-pink-100">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <input type="text" id="sheetTitle" placeholder="Sheet Name" class="input-field">
+                        <input type="text" id="sheetUrl" placeholder="Sheet URL" class="input-field">
+                        <button onclick="addSheet()" class="bg-pink-500 text-white rounded-lg font-bold">+ Add</button>
+                    </div>
+                    <input type="text" id="sheetSearch" placeholder="Search saved sheets..." onkeyup="filterSheets()" class="w-full mt-4 p-3 border rounded-xl bg-gray-50">
+                    <div id="sheetsList" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6"></div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
