@@ -6,89 +6,112 @@
     <title>LifeFlow Work Hub</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
 </head>
-<body class="bg-gray-50 text-gray-800">
-    <div class="flex h-screen">
-        <nav class="w-64 bg-white border-r p-6 flex flex-col">
-            <h1 class="text-2xl font-bold text-pink-500 mb-8">Work Hub</h1>
-            <div class="space-y-4 flex-1">
-                <button type="button" onclick="showSection('dashboard-sec')" class="nav-btn active-nav">Dashboard</button>
-                <button type="button" onclick="showSection('expenses-sec')" class="nav-btn">Expenses</button>
-                <button type="button" onclick="showSection('calendar-sec')" class="nav-btn">Calendar</button>
-                <button type="button" onclick="showSection('todo-sec')" class="nav-btn">To-Do List</button>
-                <button type="button" onclick="showSection('sheets-sec')" class="nav-btn">Google Sheets</button>
+<body class="bg-[#F9FAFB] text-[#111827]">
+    <div class="flex h-screen overflow-hidden">
+        <nav class="w-72 bg-white border-r border-gray-100 p-8 flex flex-col shrink-0">
+            <div class="flex items-center gap-3 mb-12">
+                <div class="w-10 h-10 bg-[#EC4899] rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-pink-100">W</div>
+                <div>
+                    <h1 class="text-xl font-black tracking-tight">Work Hub</h1>
+                    <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Workspace v2.0</p>
+                </div>
             </div>
-            <button type="button" onclick="window.open('https://mail.google.com', '_blank')" class="gmail-btn">
+            
+            <div class="space-y-3 flex-1">
+                <button onclick="showSection('dash-sec')" class="nav-btn active-nav">Dashboard</button>
+                <button onclick="showSection('exp-sec')" class="nav-btn">Expenses</button>
+                <button onclick="showSection('cal-sec')" class="nav-btn">Calendar</button>
+                <button onclick="showSection('todo-sec')" class="nav-btn">To-Do List</button>
+                <button onclick="showSection('sheet-sec')" class="nav-btn">Google Sheets</button>
+            </div>
+
+            <button onclick="window.open('https://mail.google.com')" class="gmail-btn">
                 Open Gmail
             </button>
         </nav>
 
-        <main class="flex-1 p-10 overflow-y-auto">
-            
-            <section id="dashboard-sec" class="space-y-6">
-                <h2 class="text-3xl font-bold">Good Afternoon</h2>
-                <p class="text-gray-500">Welcome back to your workspace.</p>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div class="stat-card"><strong>2</strong> Pending Expenses</div>
-                    <div class="stat-card"><strong>1</strong> Meeting Today</div>
-                    <div class="stat-card"><strong>0</strong> Sheets Saved</div>
-                </div>
-            </section>
+        <main class="flex-1 overflow-y-auto p-12">
+            <section id="dash-sec" class="space-y-10">
+                <header>
+                    <h2 class="text-4xl font-black tracking-tight">Good Afternoon</h2>
+                    <p class="text-gray-400 font-semibold mt-2">Thursday, April 16, 2026</p>
+                </header>
 
-            <section id="expenses-sec" class="hidden space-y-6">
-                <h2 class="text-3xl font-bold">Expense Tracker</h2>
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <input type="file" id="receiptUpload" accept="image/*" class="mb-4 text-sm">
-                    <div class="grid grid-cols-2 gap-4">
-                        <input type="text" id="expCompany" placeholder="Company Name" class="input-field">
-                        <input type="number" id="expAmount" placeholder="Amount" class="input-field">
-                        <input type="text" id="expPurpose" placeholder="Purpose" class="input-field">
-                        <button onclick="addExpense()" class="bg-pink-500 text-white p-2 rounded-lg font-bold">Save Expense</button>
+                <div class="grid grid-cols-4 gap-6">
+                    <div class="stat-card"><span>2</span>Pending Expenses</div>
+                    <div class="stat-card"><span>1</span>Meeting Today</div>
+                    <div class="stat-card"><span>1/4</span>Tasks Done</div>
+                    <div class="stat-card"><span>0</span>Saved Sheets</div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-8">
+                    <div class="card p-8">
+                        <h3 class="font-bold text-lg mb-6 flex items-center gap-3">
+                            <span class="w-1.5 h-6 bg-blue-500 rounded-full"></span> Upcoming Meetings
+                        </h3>
+                        <div class="space-y-4">
+                            <div class="p-5 bg-blue-50/40 border border-blue-100 rounded-2xl flex justify-between items-center group cursor-pointer hover:bg-blue-50 transition-colors">
+                                <div>
+                                    <p class="font-bold text-blue-900">1-on-1 with Manager</p>
+                                    <p class="text-xs text-blue-400 mt-1 font-medium">Tomorrow • 11:00 AM - 11:30 AM</p>
+                                </div>
+                                <span class="text-blue-300 group-hover:text-blue-500 transition-colors">→</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card p-8">
+                        <h3 class="font-bold text-lg mb-6 flex items-center gap-3">
+                            <span class="w-1.5 h-6 bg-pink-500 rounded-full"></span> Task Completion
+                        </h3>
+                        <div class="flex items-center gap-6">
+                            <div class="flex-1">
+                                <progress id="dashProgress" value="25" max="100" class="w-full h-3"></progress>
+                            </div>
+                            <span class="font-black text-2xl text-pink-500">25%</span>
+                        </div>
+                        <p class="text-sm text-gray-400 mt-4 font-medium">Keep it up! You're almost at your daily goal.</p>
                     </div>
                 </div>
             </section>
 
-            <section id="calendar-sec" class="hidden">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-bold text-gray-800">Calendar</h2>
-                    <div class="flex gap-2">
-                        <input type="text" id="calSearch" placeholder="Search..." onkeyup="filterCal()" class="border p-2 rounded-lg">
-                        <select id="monthJump" onchange="jumpCal()" class="border p-2 rounded-lg"></select>
+            <section id="exp-sec" class="hidden space-y-8">
+                <div class="flex justify-between items-end">
+                    <div>
+                        <h2 class="text-3xl font-black">Expense Tracker</h2>
+                        <p class="text-gray-400 font-medium mt-1">Manage and track your business claims</p>
                     </div>
+                    <button class="bg-[#EC4899] text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-lg shadow-pink-100 hover:scale-105 transition-transform">Add New</button>
                 </div>
-                <div id="calendar" class="bg-white p-4 rounded-xl shadow border"></div>
+                <div class="card overflow-hidden">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50/50 border-b border-gray-100">
+                            <tr>
+                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Purpose</th>
+                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</th>
+                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expenseList">
+                            <tr class="border-b border-gray-50 last:border-0 hover:bg-gray-50/30 transition-colors">
+                                <td class="p-5"><span class="px-4 py-1.5 bg-pink-50 text-pink-500 text-[10px] font-black rounded-full border border-pink-100">PENDING</span></td>
+                                <td class="p-5 font-bold text-sm">Grab Taxi (Client Site)</td>
+                                <td class="p-5 font-black text-sm">$25.50</td>
+                                <td class="p-5 text-xs text-gray-400 font-bold">APR 10, 2026</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
-            <section id="todo-sec" class="hidden space-y-6">
-                <h2 class="text-3xl font-bold">To-Do List</h2>
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-pink-100">
-                    <progress id="todoBar" value="0" max="100" class="w-full"></progress>
-                    <div class="mt-4 flex gap-2">
-                        <input type="text" id="taskInput" placeholder="Add a task..." class="input-field">
-                        <button onclick="addTask()" class="bg-pink-500 text-white px-4 py-2 rounded-lg font-bold">Add</button>
-                    </div>
-                    <ul id="taskList" class="mt-6 space-y-2"></ul>
-                </div>
-            </section>
-
-            <section id="sheets-sec" class="hidden space-y-6">
-                <h2 class="text-3xl font-bold">Google Sheets</h2>
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-pink-100">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <input type="text" id="sheetTitle" placeholder="Sheet Name" class="input-field">
-                        <input type="text" id="sheetUrl" placeholder="Sheet URL" class="input-field">
-                        <button onclick="addSheet()" class="bg-pink-500 text-white rounded-lg font-bold">+ Add</button>
-                    </div>
-                    <input type="text" id="sheetSearch" placeholder="Search saved sheets..." onkeyup="filterSheets()" class="w-full mt-4 p-3 border rounded-xl bg-gray-50">
-                    <div id="sheetsList" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6"></div>
-                </div>
-            </section>
+            <section id="cal-sec" class="hidden"><div id="calendar" class="card p-8"></div></section>
+            <section id="todo-sec" class="hidden"><div class="card p-8"><h2 class="text-2xl font-bold mb-4">To-Do</h2><ul id="taskList"></ul></div></section>
+            <section id="sheet-sec" class="hidden"><div class="card p-8"><h2 class="text-2xl font-bold">Sheets</h2></div></section>
 
         </main>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
