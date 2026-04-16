@@ -3,108 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LifeFlow Work Hub</title>
+    <title>Work Life Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body class="bg-[#F9FAFB] text-[#111827]">
-    <div class="flex h-screen overflow-hidden">
-        <nav class="w-72 bg-white border-r border-gray-100 p-8 flex flex-col shrink-0">
-            <div class="flex items-center gap-3 mb-12">
-                <div class="w-10 h-10 bg-[#EC4899] rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-pink-100">W</div>
-                <div>
-                    <h1 class="text-xl font-black tracking-tight">Work Hub</h1>
-                    <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Workspace v2.0</p>
-                </div>
+<body>
+    <div class="container">
+        <header>
+            <h1>Work Life Dashboard</h1>
+            <div class="header-buttons">
+                <button id="gmailBtn" class="gmail-btn">
+                    <i class="fas fa-envelope"></i> Gmail
+                </button>
+                <button id="googleSheetsBtn" class="sheets-btn">
+                    <i class="fas fa-table"></i> Sheets
+                </button>
             </div>
-            <div class="space-y-3 flex-1">
-                <button onclick="showSection('dash-sec')" class="nav-btn active-nav">Dashboard</button>
-                <button onclick="showSection('exp-sec')" class="nav-btn">Expenses</button>
-                <button onclick="showSection('cal-sec')" class="nav-btn">Calendar</button>
-                <button onclick="showSection('todo-sec')" class="nav-btn">To-Do List</button>
-                <button onclick="showSection('sheet-sec')" class="nav-btn">Google Sheets</button>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- Expense Tracker -->
+            <div class="card">
+                <h2><i class="fas fa-receipt"></i> Expense Tracker</h2>
+                <form id="expenseForm" class="expense-form">
+                    <div class="form-group">
+                        <input type="date" id="expenseDate" required>
+                        <input type="text" id="receiptName" placeholder="Receipt name" required>
+                        <input type="text" id="expensePurpose" placeholder="Purpose" required>
+                        <input type="number" id="expenseAmount" placeholder="Amount" step="0.01" required>
+                        <input type="file" id="receiptUpload" accept="image/*,.pdf" class="file-input">
+                        <label for="receiptUpload" class="file-label">
+                            <i class="fas fa-upload"></i> Upload Receipt
+                        </label>
+                    </div>
+                    <button type="submit">Add Expense</button>
+                </form>
+                <div id="expenseList" class="expense-list"></div>
             </div>
-            <button onclick="window.open('https://mail.google.com')" class="gmail-btn">Open Gmail</button>
-        </nav>
 
-        <main class="flex-1 overflow-y-auto p-12">
-            
-            <section id="dash-sec" class="space-y-10">
-                <header>
-                    <h2 class="text-4xl font-black">Good Afternoon</h2>
-                    <p class="text-gray-400 font-semibold mt-2">Thursday, April 16, 2026</p>
-                </header>
-                <div class="grid grid-cols-4 gap-6">
-                    <div class="stat-card"><span id="dash-exp-count">0</span>Pending Expenses</div>
-                    <div class="stat-card"><span>1</span>Meeting Today</div>
-                    <div class="stat-card"><span id="dash-todo-count">0/0</span>Tasks Done</div>
-                    <div class="stat-card"><span id="dash-sheet-count">0</span>Saved Sheets</div>
-                </div>
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div class="card p-8">
-                        <h3 class="font-bold text-lg mb-6 flex items-center gap-3"><span class="w-1.5 h-6 bg-blue-500 rounded-full"></span> Upcoming Meetings</h3>
-                        <div class="p-5 bg-blue-50/40 border border-blue-100 rounded-2xl flex justify-between items-center group cursor-pointer hover:bg-blue-50 transition-all">
-                            <div><p class="font-bold text-blue-900">1-on-1 with Manager</p><p class="text-xs text-blue-400 mt-1 font-medium">Tomorrow • 11:00 AM</p></div>
-                            <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-400 shadow-sm group-hover:bg-blue-500 group-hover:text-white transition-all">→</div>
-                        </div>
+            <!-- Calendar & Meetings -->
+            <div class="card">
+                <h2><i class="fas fa-calendar"></i> Calendar & Meetings</h2>
+                <form id="meetingForm" class="meeting-form">
+                    <div class="form-group">
+                        <input type="datetime-local" id="meetingDateTime" required>
+                        <input type="text" id="meetingTitle" placeholder="Meeting title" required>
+                        <input type="text" id="meetingDescription" placeholder="Description">
                     </div>
-                    <div class="card p-8">
-                        <h3 class="font-bold text-lg mb-6 flex items-center gap-3"><span class="w-1.5 h-6 bg-pink-500 rounded-full"></span> Progress</h3>
-                        <div class="flex flex-col items-center">
-                            <div class="relative w-32 h-32 mb-4">
-                                <svg class="w-full h-full" viewBox="0 0 36 36"><path class="text-gray-100" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" /><path id="circle-progress" class="text-pink-500" stroke-width="3" stroke-dasharray="0, 100" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" /></svg>
-                                <div class="absolute inset-0 flex items-center justify-center font-black text-xl" id="perc-text">0%</div>
-                            </div>
-                        </div>
+                    <button type="submit">Add Meeting</button>
+                </form>
+                <div id="meetingList" class="meeting-list"></div>
+            </div>
+
+            <!-- Todo List -->
+            <div class="card">
+                <h2><i class="fas fa-tasks"></i> Todo List</h2>
+                <form id="todoForm" class="todo-form">
+                    <div class="form-group">
+                        <input type="text" id="todoInput" placeholder="Add new task" required>
+                        <select id="todoPriority">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
                     </div>
-                </div>
-            </section>
-
-            <section id="exp-sec" class="hidden space-y-8">
-                <header class="flex justify-between items-end">
-                    <div><h2 class="text-3xl font-black">Expense Tracker</h2><p class="text-gray-400 font-medium">Manage your claims</p></div>
-                </header>
-                <div class="card p-6 bg-white mb-6">
-                    <div class="grid grid-cols-3 gap-4">
-                        <input type="text" id="expPurp" placeholder="Purpose (e.g. Taxi)" class="input-field">
-                        <input type="number" id="expAmt" placeholder="Amount ($)" class="input-field">
-                        <button onclick="addExpense()" class="bg-pink-500 text-white rounded-xl font-bold">Add Expense</button>
+                    <button type="submit">Add Task</button>
+                </form>
+                <div class="progress-section">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
                     </div>
+                    <span id="progressText">0% Complete</span>
                 </div>
-                <div class="card overflow-hidden">
-                    <table class="w-full text-left">
-                        <thead class="bg-gray-50 border-b">
-                            <tr>
-                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase">Status</th>
-                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase">Purpose</th>
-                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase">Amount</th>
-                                <th class="p-5 text-[10px] font-black text-gray-400 uppercase text-right">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="expenseList"></tbody>
-                    </table>
-                </div>
-            </section>
+                <div id="todoList" class="todo-list"></div>
+            </div>
 
-            <section id="todo-sec" class="hidden space-y-8">
-                <header><h2 class="text-3xl font-black">To-Do List</h2><p class="text-gray-400 font-medium">Daily tasks</p></header>
-                <div class="card p-8">
-                    <div class="flex gap-4 mb-8">
-                        <input type="text" id="todoInput" placeholder="Enter new task..." class="input-field flex-1">
-                        <button onclick="addTodo()" class="bg-pink-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-pink-100">Add Task</button>
-                    </div>
-                    <div id="todoContainer" class="space-y-4"></div>
-                </div>
-            </section>
-
-            <section id="cal-sec" class="hidden space-y-8">
-                <header><h2 class="text-3xl font-black">Calendar</h2></header>
-                <div id="calendar" class="card p-8"></div>
-            </section>
-
-        </main>
-    </div>
-    <script src="script.js"></script>
-</body>
-</html>
+            <!-- Google Sheets Links -->
+            <div class="card">
+                <h2><i class="fas fa
