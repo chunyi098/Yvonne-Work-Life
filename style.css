@@ -1,71 +1,86 @@
-/* Sidebar Buttons */
+/* Custom Sidebar Buttons */
 .nav-btn {
-    display: block;
     width: 100%;
     text-align: left;
-    padding: 10px;
-    border-radius: 8px;
-    font-weight: 500;
+    padding: 16px 24px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 14px;
+    color: #9CA3AF;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
-    transition: all 0.2s;
+    border: 1px solid transparent;
 }
 
 .nav-btn:hover {
-    background-color: #fce7f3; /* Light pink */
+    background-color: #FFF1F2;
+    color: #EC4899;
 }
 
 .active-nav {
-    background-color: #fce7f3 !important;
-    color: #db2777 !important;
-    font-weight: 700;
+    background-color: #FFF1F2 !important;
+    color: #EC4899 !important;
+    border: 1px solid #FCE7F3 !important;
+    box-shadow: 0 4px 20px rgba(236, 72, 153, 0.08);
 }
 
-/* Gmail Button */
+/* Gmail Button Styling */
 .gmail-btn {
-    background-color: #ec4899;
+    background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%);
     color: white;
-    padding: 12px;
-    border-radius: 12px;
-    font-weight: bold;
+    padding: 18px;
+    border-radius: 22px;
+    font-weight: 800;
+    font-size: 15px;
+    box-shadow: 0 12px 24px rgba(236, 72, 153, 0.25);
     cursor: pointer;
-    transition: transform 0.2s;
+    transition: all 0.3s ease;
+    border: none;
 }
 
 .gmail-btn:hover {
-    transform: scale(1.02);
-    background-color: #db2777;
+    transform: translateY(-3px);
+    box-shadow: 0 15px 30px rgba(236, 72, 153, 0.35);
 }
 
-/* Cards & Inputs */
+/* Card Styling */
+.card {
+    background: white;
+    border-radius: 32px;
+    border: 1px solid #F3F4F6;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.02);
+}
+
 .stat-card {
     background: white;
-    padding: 20px;
-    border-radius: 15px;
-    border: 1px solid #f3f4f6;
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    padding: 28px;
+    border-radius: 32px;
+    border: 1px solid #F3F4F6;
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    font-weight: 800;
+    color: #D1D5DB;
+    text-transform: uppercase;
+    tracking: 1px;
 }
 
-.input-field {
-    border: 1px solid #f3f4f6;
-    padding: 8px;
-    border-radius: 8px;
-    outline: none;
+.stat-card span {
+    font-size: 36px;
+    color: #111827;
+    line-height: 1;
+    margin-bottom: 12px;
+    font-weight: 900;
 }
 
-.input-field:focus {
-    border-color: #f472b6;
-    box-shadow: 0 0 0 2px #fbcfe8;
-}
-
-/* Progress Bar */
+/* Custom Progress Bar - Pink */
 progress {
-    height: 12px;
-    border-radius: 10px;
-    overflow: hidden;
+    appearance: none;
+    border: none;
 }
-progress::-webkit-progress-bar { background-color: #f3f4f6; }
-progress::-webkit-progress-value { background-color: #ec4899; }
+progress::-webkit-progress-bar { background-color: #F3F4F6; border-radius: 20px; }
+progress::-webkit-progress-value { background-color: #EC4899; border-radius: 20px; }
 
-.fc-button-primary:hover {
-    background-color: #f47291 !important;
-}
+/* Calendar Tweaks */
+.fc .fc-toolbar-title { font-weight: 900 !important; color: #111827; }
+.fc .fc-daygrid-day.fc-day-today { background-color: #FFF1F2 !important; }
