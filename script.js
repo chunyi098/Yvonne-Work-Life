@@ -66,7 +66,7 @@ function showPage(pageId) {
 }
 
 // ============================================================
-// API KEY  (still optional — used only if present)
+// API KEY  (optional)
 // ============================================================
 function getApiKey() { return localStorage.getItem('wh_apikey') || ''; }
 function updateApiKeyStatus() {
@@ -172,6 +172,7 @@ function openExpenseModal() {
   el('ai-processing').classList.remove('visible');
   el('ai-processing').textContent = '';
   el('ocr-progress-wrap').style.display = 'none';
+  el('ocr-raw-box').style.display = 'none';
 }
 function closeExpenseModal() {
   el('expense-modal').classList.remove('open');
@@ -180,6 +181,7 @@ function closeExpenseModal() {
   currentReceiptDataUrl = '';
   el('ai-processing').classList.remove('visible');
   el('ocr-progress-wrap').style.display = 'none';
+  el('ocr-raw-box').style.display = 'none';
   resetUploadArea();
 }
 function resetUploadArea() {
@@ -190,7 +192,7 @@ function resetUploadArea() {
   area.style.borderColor     = '';
   el('upload-icon-wrap').style.display = 'flex';
   el('upload-text').textContent     = 'Upload Receipt';
-  el('upload-sub-text').textContent = 'PNG, JPG, WEBP \u2014 auto-scanned for free, no API key needed';
+  el('upload-sub-text').textContent = 'PNG, JPG, WEBP \u2014 auto-scanned free, no API key needed';
 }
 function saveExpense() {
   const name    = el('exp-name').value.trim();
@@ -204,89 +206,146 @@ function saveExpense() {
 }
 
 // ============================================================
-// RECEIPT PROCESSING  —  Tesseract OCR (free) + optional Claude AI
+// RECEIPT PARSER  —  works on raw OCR text, no API key needed
 // ============================================================
+function parseReceiptText(raw) {
+  // ---- normalise ----
+  const text  = raw.replace(/\r/g, '\n');
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const upper = text.toUpperCase();
 
-// ---------- Smart text parser ----------
-function parseReceiptText(rawText) {
-  const lines  = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-  const full   = rawText.toUpperCase();
-
-  // --- Amount: find the LARGEST dollar value on the receipt ---
-  // Looks for patterns like: $12.50  /  12.50  /  SGD 12.50  /  TOTAL 12.50
-  const amountCandidates = [];
-  const amtRe = /(?:total|amount|amt|subtotal|sub-total|grand|due|pay|sgd|s\$|\$)?\s*[\$S]?\s*(\d{1,6}\.\d{2})(?!\d)/gi;
-  let m;
-  while ((m = amtRe.exec(rawText)) !== null) {
-    const v = parseFloat(m[1]);
-    if (v > 0 && v < 100000) amountCandidates.push(v);
-  }
-  // prefer lines with TOTAL keyword
+  // ================================================================
+  // AMOUNT  — most important field, multiple strategies
+  // ================================================================
   let amount = '';
-  const totalLineRe = /(?:total|grand total|amount due|balance due)[^\d]*(\d{1,6}\.\d{2})/i;
-  const totalMatch  = rawText.match(totalLineRe);
-  if (totalMatch) {
-    amount = totalMatch[1];
-  } else if (amountCandidates.length) {
-    // pick the largest value (usually the grand total)
-    amount = String(Math.max(...amountCandidates));
+
+  // Strategy 1: line that explicitly says total / amount due / balance
+  const totalKeywords = [
+    /total\s*(?:amount)?[:\s]*\$?\s*(\d[\d,]*\.\d{2})/i,
+    /amount\s*(?:due|paid|payable)[:\s]*\$?\s*(\d[\d,]*\.\d{2})/i,
+    /grand\s*total[:\s]*\$?\s*(\d[\d,]*\.\d{2})/i,
+    /balance\s*(?:due)?[:\s]*\$?\s*(\d[\d,]*\.\d{2})/i,
+    /(?:net\s*)?total[:\s]*\$?\s*(\d[\d,]*\.\d{2})/i,
+    /(?:s\$|sgd|usd|myr)\s*(\d[\d,]*\.\d{2})/i,
+  ];
+  for (const re of totalKeywords) {
+    const m = text.match(re);
+    if (m) { amount = m[1].replace(/,/g,''); break; }
   }
 
-  // --- Date: look for common date formats ---
+  // Strategy 2: scan every line — find number at end of line that looks like a price
+  // collect all candidates then pick the largest (grand total is usually the biggest)
+  if (!amount) {
+    const candidates = [];
+    for (const line of lines) {
+      // match any price-like number: optional $ S$ SGD then digits.2digits
+      const m = line.match(/(?:\$|S\$|SGD|RM|USD)?\s*(\d{1,6}[.,]\d{2})\s*$/i);
+      if (m) {
+        const v = parseFloat(m[1].replace(',','.'));
+        if (v > 0.01 && v < 99999) candidates.push(v);
+      }
+    }
+    if (candidates.length) {
+      // largest value = grand total
+      amount = String(Math.max(...candidates).toFixed(2));
+    }
+  }
+
+  // Strategy 3: any number with 2 decimal places anywhere in text
+  if (!amount) {
+    const allNums = [];
+    const re3 = /\b(\d{1,6}\.\d{2})\b/g;
+    let m3;
+    while ((m3 = re3.exec(text)) !== null) {
+      const v = parseFloat(m3[1]);
+      if (v > 0.5 && v < 99999) allNums.push(v);
+    }
+    if (allNums.length) amount = String(Math.max(...allNums).toFixed(2));
+  }
+
+  // ================================================================
+  // DATE  — try multiple formats
+  // ================================================================
   let date = '';
+  const monthNames = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
   const datePatterns = [
-    /(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/,          // DD/MM/YYYY or MM/DD/YYYY
-    /(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/,             // YYYY-MM-DD
-    /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{2,4})/i,
-    /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})[,\s]+(\d{2,4})/i
+    // YYYY-MM-DD or YYYY/MM/DD
+    /\b(20\d{2})[-\/](0?[1-9]|1[0-2])[-\/](0?[1-9]|[12]\d|3[01])\b/,
+    // DD/MM/YYYY or DD-MM-YYYY
+    /\b(0?[1-9]|[12]\d|3[01])[-\/](0?[1-9]|1[0-2])[-\/](20\d{2})\b/,
+    // DD Mon YYYY  e.g. 15 Apr 2026
+    new RegExp('\\b(0?[1-9]|[12]\\d|3[01])\\s+(' + monthNames + ')[a-z]*\\s+(20\\d{2})\\b', 'i'),
+    // Mon DD, YYYY  e.g. Apr 15, 2026
+    new RegExp('\\b(' + monthNames + ')[a-z]*\\s+(0?[1-9]|[12]\\d|3[01])[,\\s]+(20\\d{2})\\b', 'i'),
+    // DD/MM/YY  short year
+    /\b(0?[1-9]|[12]\d|3[01])[-\/](0?[1-9]|1[0-2])[-\/](\d{2})\b/,
   ];
   for (const pat of datePatterns) {
-    const dm = rawText.match(pat);
-    if (dm) {
+    const m = text.match(pat);
+    if (m) {
       try {
-        const parsed = new Date(dm[0]);
-        if (!isNaN(parsed)) { date = parsed.toISOString().split('T')[0]; break; }
+        const d = new Date(m[0].replace(/-/g,'/'));
+        if (!isNaN(d.getTime()) && d.getFullYear() >= 2000) {
+          date = d.toISOString().split('T')[0];
+          break;
+        }
       } catch(_) {}
     }
   }
-  if (!date) date = todayStr(); // fallback to today
+  if (!date) date = todayStr();
 
-  // --- Merchant name: usually in the first few non-empty lines ---
-  // Skip lines that look like addresses (numbers + street keywords) or dates
-  const skipRe = /^(\d{1,5}\s|receipt|tax|invoice|tel|phone|address|website|www|http|gst|uen|reg|\d{2}[\/-])/i;
+  // ================================================================
+  // MERCHANT NAME  — first meaningful line near top
+  // ================================================================
+  // Patterns to skip: pure numbers, addresses, common receipt boilerplate
+  const skipLine = /^(\d[\d\s\-\/]+$|receipt|invoice|tax invoice|order|tel:|phone:|fax:|gst|uen|reg\s*no|website|www\.|http|address:|thank you|page \d|cashier|server|table|pos |ref |#)/i;
+  const skipShort = 2;
   let name = '';
-  for (let i = 0; i < Math.min(lines.length, 8); i++) {
-    const line = lines[i];
-    if (line.length < 3) continue;
-    if (skipRe.test(line)) continue;
-    if (/^\d+(\.\d+)?$/.test(line)) continue; // pure number
-    // favour lines in ALL CAPS or Title Case (typical for store names)
-    name = line.replace(/[^a-zA-Z0-9\s&'.-]/g, '').trim();
-    if (name.length >= 3) break;
-  }
-  if (!name) name = lines[0] ? lines[0].replace(/[^a-zA-Z0-9\s]/g,'').trim() : 'Receipt';
 
-  // --- Purpose: look for category keywords in the text ---
+  for (let i = 0; i < Math.min(lines.length, 12); i++) {
+    const ln = lines[i];
+    if (ln.length <= skipShort) continue;
+    if (skipLine.test(ln)) continue;
+    if (/^\d+(\.\d+)?$/.test(ln)) continue;            // pure number
+    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(ln)) continue; // date only
+    // strip non-printable / special chars, keep letters, numbers, spaces, & ' .
+    const clean = ln.replace(/[^\w\s&'.,-]/g, '').trim();
+    if (clean.length >= 3) { name = clean; break; }
+  }
+  if (!name) name = lines.length ? lines[0].replace(/[^\w\s]/g,'').trim().slice(0,40) : 'Receipt';
+  if (!name) name = 'Receipt';
+
+  // ================================================================
+  // PURPOSE  — keyword matching
+  // ================================================================
   const purposeMap = [
-    [/grab|taxi|gojek|lyft|uber|ride|transport|cab/i,   'Transport'],
-    [/hotel|airbnb|lodg|accommodat|resort/i,             'Accommodation'],
-    [/restaurant|cafe|coffee|food|lunch|dinner|breakfast|hawker|drinks|bistro|kitchen|eat/i, 'Meals & Entertainment'],
-    [/supermarket|grocery|fairprice|cold storage|giant|sheng siong/i, 'Groceries'],
-    [/office|stationery|supply|supplies|depot|print/i,   'Office Supplies'],
-    [/flight|airline|airfare|train|mrt|bus|toll/i,       'Travel'],
-    [/pharmacy|clinic|hospital|medical|health/i,         'Medical'],
-    [/book|course|training|seminar|conference/i,         'Training & Education'],
-    [/software|subscription|saas|cloud|hosting/i,        'Software & Subscriptions'],
+    [/grab|gojek|taxi|uber|lyft|ride.hail|transport|cab\b/i,          'Transport'],
+    [/mrt|bus|train|commut|toll|ez.?link/i,                           'Transport'],
+    [/flight|airlin|airfare|airport|air ticket/i,                     'Travel'],
+    [/hotel|airbnb|resort|lodg|accommodat|inn\b/i,                    'Accommodation'],
+    [/restaurant|bistro|hawker|kopitiam|foodcourt|food court|dining/i,'Meals & Entertainment'],
+    [/cafe|coffee|starbucks|ya kun|toast box|koi|gong cha/i,          'Meals & Entertainment'],
+    [/lunch|dinner|breakfast|supper|meal|eat|drink\b/i,               'Meals & Entertainment'],
+    [/fairprice|cold storage|giant|sheng siong|supermarket|grocery/i, 'Groceries'],
+    [/7.?eleven|cheers|watsons|guardian|convenience/i,                'Groceries'],
+    [/office|stationery|supplies|depot|print|paper\b/i,               'Office Supplies'],
+    [/pharmacy|clinic|hospital|polyclinic|medical|dental|health/i,    'Medical'],
+    [/book|course|training|seminar|conference|workshop/i,              'Training & Education'],
+    [/software|subscription|saas|cloud|hosting|domain/i,              'Software & Subscriptions'],
+    [/grab ?food|food.?panda|deliveroo|deliver/i,                     'Meals & Entertainment'],
   ];
   let purpose = 'Business Expense';
+  const searchText = upper + ' ' + name.toUpperCase();
   for (const [re, label] of purposeMap) {
-    if (re.test(full) || re.test(name)) { purpose = label; break; }
+    if (re.test(searchText)) { purpose = label; break; }
   }
 
   return { name, amount, date, purpose };
 }
 
-// ---------- Main handler ----------
+// ============================================================
+// RECEIPT PROCESSING
+// ============================================================
 async function processReceipt(input) {
   const file = input.files[0];
   if (!file) return;
@@ -294,7 +353,7 @@ async function processReceipt(input) {
   const aiEl = el('ai-processing');
   const area = el('upload-area');
 
-  // Read file → dataURL
+  // Read to data URL
   const dataUrl = await new Promise((res, rej) => {
     const r = new FileReader();
     r.onload  = () => res(r.result);
@@ -304,35 +363,34 @@ async function processReceipt(input) {
   currentReceiptDataUrl = dataUrl;
 
   // Show image preview
-  if (file.type.startsWith('image/')) {
-    area.style.backgroundImage    = 'url(' + dataUrl + ')';
-    area.style.backgroundSize     = 'cover';
-    area.style.backgroundPosition = 'center';
-    area.style.minHeight          = '120px';
-    area.style.borderColor        = '#FF3B7F';
-    el('upload-icon-wrap').style.display = 'none';
-    el('upload-text').textContent     = '\u2713 ' + file.name;
-    el('upload-sub-text').textContent = 'Scanning...';
-  }
+  area.style.backgroundImage    = 'url(' + dataUrl + ')';
+  area.style.backgroundSize     = 'cover';
+  area.style.backgroundPosition = 'center';
+  area.style.minHeight          = '120px';
+  area.style.borderColor        = '#FF3B7F';
+  el('upload-icon-wrap').style.display = 'none';
+  el('upload-text').textContent     = '\u2713 ' + file.name;
+  el('upload-sub-text').textContent = 'Scanning...';
 
-  // ---- Try Claude AI first if API key exists ----
-  const apiKey = getApiKey();
-  if (apiKey) {
-    await scanWithClaude(dataUrl, file, apiKey, aiEl);
-    return;
+  // Use Claude AI if API key exists, else Tesseract
+  if (getApiKey()) {
+    await scanWithClaude(dataUrl, file, getApiKey(), aiEl);
+  } else {
+    await scanWithTesseract(dataUrl, file, aiEl);
   }
-
-  // ---- Fallback: Tesseract.js OCR (no key needed) ----
-  await scanWithTesseract(dataUrl, aiEl);
 }
 
-async function scanWithTesseract(dataUrl, aiEl) {
+// ---- Tesseract OCR (free, runs in browser) ----
+async function scanWithTesseract(dataUrl, file, aiEl) {
   const progressWrap = el('ocr-progress-wrap');
   const bar          = el('ocr-bar');
   const pctText      = el('ocr-pct');
   const statusText   = el('ocr-status-text');
+  const rawBox       = el('ocr-raw-box');
+  const rawPre       = el('ocr-raw-text');
 
   progressWrap.style.display = 'block';
+  rawBox.style.display       = 'none';
   aiEl.classList.remove('visible');
 
   try {
@@ -340,50 +398,68 @@ async function scanWithTesseract(dataUrl, aiEl) {
       logger: function(info) {
         if (info.status === 'recognizing text') {
           const p = Math.round((info.progress || 0) * 100);
-          bar.style.width  = p + '%';
-          pctText.textContent  = p + '%';
+          bar.style.width        = p + '%';
+          pctText.textContent    = p + '%';
           statusText.textContent = 'Reading receipt... ' + p + '%';
         } else if (info.status === 'loading tesseract core') {
-          statusText.textContent = 'Loading OCR engine...';
+          statusText.textContent = 'Loading OCR engine (first time only)...';
         } else if (info.status === 'initializing tesseract') {
-          statusText.textContent = 'Initialising...';
+          statusText.textContent = 'Initialising OCR...';
         } else if (info.status === 'loading language traineddata') {
           statusText.textContent = 'Loading language data...';
+        } else if (info.status === 'initializing api') {
+          statusText.textContent = 'Starting up...';
         }
       }
     });
 
     progressWrap.style.display = 'none';
-    const rawText = result.data.text;
+    const rawText = result.data.text || '';
 
-    if (!rawText || rawText.trim().length < 5) {
-      throw new Error('Could not read text from image. Please fill in manually.');
+    // Show raw text box so user can verify what OCR read
+    if (rawText.trim().length > 0) {
+      rawPre.textContent     = rawText;
+      rawBox.style.display   = 'block';
+    }
+
+    if (rawText.trim().length < 3) {
+      throw new Error('OCR could not read any text. Try a clearer, higher-resolution screenshot.');
     }
 
     const parsed = parseReceiptText(rawText);
 
-    if (parsed.name)    el('exp-name').value    = parsed.name;
-    if (parsed.amount)  el('exp-amount').value  = parsed.amount;
-    if (parsed.date)    el('exp-date').value     = parsed.date;
-    if (parsed.purpose) el('exp-purpose').value = parsed.purpose;
+    // Fill in fields — always fill name; only fill amount/date if we found them
+    el('exp-name').value    = parsed.name    || '';
+    el('exp-amount').value  = parsed.amount  || '';
+    el('exp-date').value    = parsed.date    || todayStr();
+    el('exp-purpose').value = parsed.purpose || '';
 
     el('upload-sub-text').textContent = 'Click to change';
-    aiEl.textContent      = '\u2713 Receipt scanned! Check the fields and adjust if needed.';
-    aiEl.style.background = '#ecfdf5';
-    aiEl.style.color      = '#15803d';
+
+    const filledCount = [parsed.name, parsed.amount].filter(Boolean).length;
+    if (filledCount === 2) {
+      aiEl.textContent      = '\u2713 Fields auto-filled from OCR! Please review and adjust if needed.';
+      aiEl.style.background = '#ecfdf5';
+      aiEl.style.color      = '#15803d';
+    } else {
+      aiEl.textContent      = '\u26a0\ufe0f OCR read the text (see below) but could not find all fields. Please fill in any missing ones.';
+      aiEl.style.background = '#fffbeb';
+      aiEl.style.color      = '#b45309';
+    }
     aiEl.classList.add('visible');
 
   } catch (err) {
     progressWrap.style.display = 'none';
     console.error('OCR error:', err);
-    aiEl.textContent      = '\u26a0\ufe0f ' + (err.message || 'Scan failed — please fill in fields manually.');
-    aiEl.style.background = '#fffbeb';
-    aiEl.style.color      = '#b45309';
+    aiEl.textContent      = '\u26a0\ufe0f ' + (err.message || 'Scan failed \u2014 please fill in fields manually.');
+    aiEl.style.background = '#fff0f0';
+    aiEl.style.color      = '#cc0000';
     aiEl.classList.add('visible');
     el('upload-sub-text').textContent = 'Click to change';
   }
 }
 
+// ---- Claude AI (if API key saved) ----
 async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
   aiEl.textContent      = '\ud83e\udd16 Claude AI is reading your receipt...';
   aiEl.style.background = '#FFE0ED';
@@ -391,7 +467,7 @@ async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
   aiEl.classList.add('visible');
   try {
     const b64 = dataUrl.split(',')[1];
-    let mt = file.type || 'image/png';
+    const mt  = file.type || 'image/png';
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -405,18 +481,18 @@ async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
         max_tokens: 300,
         messages: [{ role:'user', content: [
           { type:'image', source:{ type:'base64', media_type:mt, data:b64 } },
-          { type:'text',  text:'This is a receipt. Extract: merchant name, total amount paid (number only, no currency), date (YYYY-MM-DD), and brief purchase category. Reply ONLY as JSON: {"name":"...","amount":"...","date":"...","purpose":"..."}' }
+          { type:'text',  text:'This is a receipt. Extract: merchant name, total amount paid (number only, no currency symbol), date in YYYY-MM-DD format, and purchase category. Reply ONLY as JSON with no extra text: {"name":"...","amount":"...","date":"...","purpose":"..."}' }
         ]}]
       })
     });
     if (!resp.ok) {
       const err = await resp.json().catch(()=>({}));
       if (resp.status===401) throw new Error('Invalid API key.');
-      if (resp.status===429) throw new Error('Rate limit — try again shortly.');
+      if (resp.status===429) throw new Error('Rate limit \u2014 try again shortly.');
       throw new Error((err.error&&err.error.message)||'HTTP '+resp.status);
     }
-    const data = await resp.json();
-    const txt  = (data.content||[]).map(c=>c.text||'').join('');
+    const data   = await resp.json();
+    const txt    = (data.content||[]).map(c=>c.text||'').join('');
     let parsed;
     try { parsed = JSON.parse(txt.replace(/```json|```/g,'').trim()); }
     catch(_) { const mm=txt.match(/\{[\s\S]*?\}/); if(!mm) throw new Error('Bad AI response'); parsed=JSON.parse(mm[0]); }
@@ -425,13 +501,12 @@ async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
     if (parsed.date)    el('exp-date').value     = parsed.date;
     if (parsed.purpose) el('exp-purpose').value = parsed.purpose;
     el('upload-sub-text').textContent = 'Click to change';
-    aiEl.textContent      = '\u2713 Claude auto-filled the fields — check before saving.';
+    aiEl.textContent      = '\u2713 Claude auto-filled the fields \u2014 check before saving.';
     aiEl.style.background = '#ecfdf5';
     aiEl.style.color      = '#15803d';
   } catch(err) {
     console.warn('Claude failed, falling back to OCR:', err.message);
-    // Gracefully fall back to Tesseract
-    await scanWithTesseract(dataUrl, aiEl);
+    await scanWithTesseract(dataUrl, file, aiEl);
   }
 }
 
@@ -529,7 +604,7 @@ function renderTodos() {
   el('todo-progress-label').textContent=done+'/'+todos.length+' completed';
   el('todo-list').innerHTML=todos.map(t =>
     '<div class="todo-item">' +
-    '<button class="check-btn '+(t.done?'done':'')+' " onclick="toggleTodo('+t.id+')"></button>' +
+    '<button class="check-btn '+(t.done?'done':'')+'" onclick="toggleTodo('+t.id+')"></button>' +
     '<span class="todo-text '+(t.done?'done':'')+'">'+t.text+'</span>' +
     '<button class="todo-del" onclick="deleteTodo('+t.id+')">&times;</button>' +
     '</div>').join('');
