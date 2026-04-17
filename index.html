@@ -20,7 +20,8 @@
     <button class="nav-item" onclick="showPage('calendar')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1a1 1 0 012 0v1h4V1a1 1 0 012 0v1h1a2 2 0 012 2v9a2 2 0 01-2 2H3a2 2 0 01-2-2V4a2 2 0 012-2h1V1zm-1 5v7h10V6H3z"/></svg>Calendar</button>
     <button class="nav-item" onclick="showPage('todos')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h4v1H5V9z"/></svg>To-Do</button>
     <button class="nav-item" onclick="showPage('sheets')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V6L9 1zm0 1.5L13.5 7H9V2.5zM4 3h4v5h5v5H4V3z"/></svg>Sheets</button>
-   <div style="margin-top:auto;padding:12px 16px;border-top:1px solid #eee">
+    <button class="nav-item" onclick="showPage('gmail')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h12v10H2V3zm1 1v1.5l5 3.5 5-3.5V4H3zm0 3v5h10V7L8 10 3 7z"/></svg>Gmail</button>
+    <div style="margin-top:auto;padding:12px 16px;border-top:1px solid #eee">
       <button onclick="openApiKeyModal()" style="width:100%;background:none;border:1px solid #eee;border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;justify-content:center">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="#aaa"><path d="M10 1a5 5 0 013.54 8.54L14 10h1v2h-1v2h-2v-1h-1v-1h-1l-1.46-1.46A5 5 0 1110 1zm0 2a3 3 0 100 6 3 3 0 000-6zm0 1.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3z"/></svg>
         <span id="api-key-status">Set API Key (optional)</span>
@@ -120,6 +121,21 @@
       </div>
     </div>
 
+    <div id="page-gmail" class="page">
+      <div class="page-header"><div><div class="page-title">Gmail</div><div class="page-sub">Your inbox</div></div></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid #eee;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:13px;color:#888">Tabs:</span>
+          <button class="filter-tab active" id="gmail-tab-inbox" onclick="switchGmail('inbox',this)">Inbox</button>
+          <button class="filter-tab" id="gmail-tab-starred" onclick="switchGmail('starred',this)">Starred</button>
+          <button class="filter-tab" id="gmail-tab-sent" onclick="switchGmail('sent',this)">Sent</button>
+          <button class="filter-tab" id="gmail-tab-trash" onclick="switchGmail('trash',this)">Trash</button>
+          <a href="https://mail.google.com" target="_blank" style="margin-left:auto;font-size:12px;color:#FF3B7F">Open full Gmail &#8599;</a>
+        </div>
+        <iframe id="gmail-iframe" src="https://mail.google.com/mail/u/0/#inbox" style="width:100%;height:580px;border:none" title="Gmail"></iframe>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -194,5 +210,4 @@
       <button class="btn-pink" onclick="saveSheet()">Add Sheet</button>
     </div>
   </div>
-</div>
 </div>
