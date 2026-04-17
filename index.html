@@ -215,10 +215,10 @@
   <div class="modal">
     <div class="modal-title">API Key (optional)</div>
     <p style="font-size:13px;color:#555;line-height:1.6;margin-bottom:8px">
-      Receipt scanning now works <strong>without any API key</strong> using built-in OCR.
-      An Anthropic API key gives smarter results for complex receipts.
+      Receipt scanning works <strong>free with no API key</strong> using built-in OCR.
+      Adding an Anthropic API key gives smarter results on complex receipts.
     </p>
-    <p style="font-size:12px;color:#999;margin-bottom:14px">Your key is stored <strong>only in this browser</strong> and never shared.</p>
+    <p style="font-size:12px;color:#999;margin-bottom:14px">Your key is stored <strong>only in this browser</strong>, never shared.</p>
     <div class="form-group" style="margin-bottom:8px">
       <label class="form-label">API Key</label>
       <input class="form-input" id="apikey-input" type="password" placeholder="sk-ant-..." />
@@ -238,15 +238,20 @@
 <div id="expense-modal" class="modal-overlay" onclick="if(event.target===this)closeExpenseModal()">
   <div class="modal">
     <div class="modal-title">Add Expense</div>
+
+    <!-- Upload / preview area -->
     <div class="upload-area" id="upload-area" onclick="document.getElementById('receipt-file').click()">
       <div id="upload-icon-wrap" class="upload-icon">
         <svg width="20" height="20" viewBox="0 0 16 16" fill="#FF3B7F"><path d="M8 1l4 4H9v5H7V5H4l4-4zM2 12h12v2H2v-2z"/></svg>
       </div>
       <div class="upload-text" id="upload-text">Upload Receipt</div>
-      <div class="upload-sub" id="upload-sub-text">PNG, JPG, WEBP &mdash; auto-scanned for free, no API key needed</div>
+      <div class="upload-sub" id="upload-sub-text">PNG, JPG, WEBP &mdash; auto-scanned free, no API key needed</div>
     </div>
     <input type="file" id="receipt-file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="processReceipt(this)" />
+
+    <!-- Status message -->
     <div class="ai-processing" id="ai-processing"></div>
+
     <!-- OCR progress bar -->
     <div id="ocr-progress-wrap" style="display:none;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#999;margin-bottom:4px">
@@ -257,6 +262,16 @@
         <div id="ocr-bar" style="height:100%;background:#FF3B7F;border-radius:99px;width:0%;transition:width 0.2s"></div>
       </div>
     </div>
+
+    <!-- Raw OCR text (debug / review) -->
+    <div id="ocr-raw-box" style="display:none;margin-bottom:12px">
+      <div style="font-size:11px;color:#999;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
+        <span>Raw text read by OCR &mdash; use this to check what was scanned:</span>
+        <button onclick="el('ocr-raw-box').style.display='none'" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px">&times;</button>
+      </div>
+      <pre id="ocr-raw-text" style="font-size:11px;background:#f8f8f8;border:1px solid #eee;border-radius:8px;padding:8px;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;color:#555;margin:0"></pre>
+    </div>
+
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Receipt / Name</label>
