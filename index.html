@@ -8,6 +8,9 @@
 </head>
 <body>
 
+<!-- Finance confirm banner (shown when returning from finance portal) -->
+<div id="finance-confirm-banner" style="display:none;position:fixed;top:0;left:0;right:0;background:#15803d;color:white;text-align:center;padding:12px 16px;font-size:14px;font-weight:600;z-index:999"></div>
+
 <div class="app">
 
   <!-- SIDEBAR -->
@@ -109,7 +112,13 @@
           <div class="page-title">Expense Tracker</div>
           <div class="page-sub">Track &amp; manage company reimbursements</div>
         </div>
-        <button class="btn-pink" onclick="openExpenseModal()">+ Add Expense</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-finance" onclick="openFinanceLink()">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13 2H3a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1V3a1 1 0 00-1-1zM7 11H5V7h2v4zm4 0H9V5h2v6z"/></svg>
+            Share with Finance
+          </button>
+          <button class="btn-pink" onclick="openExpenseModal()">+ Add Expense</button>
+        </div>
       </div>
       <div class="stat-grid">
         <div class="stat-card"><div><div class="stat-val" id="exp-total">$0.00</div><div class="stat-label">Total Expenses</div></div></div>
@@ -234,12 +243,26 @@
   </div>
 </div>
 
+<!-- FINANCE SHARE LINK MODAL -->
+<div id="finance-link-modal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-title">Share with Finance Team</div>
+    <p style="font-size:13px;color:#555;line-height:1.6;margin-bottom:12px">
+      Send this link to your finance team. They can see your pending expenses and mark them as paid.
+      When they send you back the confirmation link, open it and your dashboard updates automatically.
+    </p>
+    <div style="background:#f8f8f8;border:1px solid #eee;border-radius:8px;padding:10px 12px;font-size:11px;color:#555;word-break:break-all;margin-bottom:12px" id="finance-link-text"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="el('finance-link-modal').classList.remove('open')">Close</button>
+      <button class="btn-pink" id="finance-copy-btn" onclick="copyFinanceLink()">Copy Link</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD EXPENSE -->
 <div id="expense-modal" class="modal-overlay" onclick="if(event.target===this)closeExpenseModal()">
   <div class="modal">
     <div class="modal-title">Add Expense</div>
-
-    <!-- Upload / preview area -->
     <div class="upload-area" id="upload-area" onclick="document.getElementById('receipt-file').click()">
       <div id="upload-icon-wrap" class="upload-icon">
         <svg width="20" height="20" viewBox="0 0 16 16" fill="#FF3B7F"><path d="M8 1l4 4H9v5H7V5H4l4-4zM2 12h12v2H2v-2z"/></svg>
@@ -248,11 +271,7 @@
       <div class="upload-sub" id="upload-sub-text">PNG, JPG, WEBP &mdash; auto-scanned free, no API key needed</div>
     </div>
     <input type="file" id="receipt-file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="processReceipt(this)" />
-
-    <!-- Status message -->
     <div class="ai-processing" id="ai-processing"></div>
-
-    <!-- OCR progress bar -->
     <div id="ocr-progress-wrap" style="display:none;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#999;margin-bottom:4px">
         <span id="ocr-status-text">Reading receipt...</span>
@@ -262,16 +281,13 @@
         <div id="ocr-bar" style="height:100%;background:#FF3B7F;border-radius:99px;width:0%;transition:width 0.2s"></div>
       </div>
     </div>
-
-    <!-- Raw OCR text (debug / review) -->
     <div id="ocr-raw-box" style="display:none;margin-bottom:12px">
       <div style="font-size:11px;color:#999;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
-        <span>Raw text read by OCR &mdash; use this to check what was scanned:</span>
+        <span>Raw text read by OCR &mdash; use this to verify what was scanned:</span>
         <button onclick="el('ocr-raw-box').style.display='none'" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px">&times;</button>
       </div>
       <pre id="ocr-raw-text" style="font-size:11px;background:#f8f8f8;border:1px solid #eee;border-radius:8px;padding:8px;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;color:#555;margin:0"></pre>
     </div>
-
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Receipt / Name</label>
@@ -341,7 +357,6 @@
   </div>
 </div>
 
-<!-- Tesseract.js OCR — runs 100% in the browser, no API key needed -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="script.js"></script>
 </body>
