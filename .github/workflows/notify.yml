@@ -1,18 +1,26 @@
-name: Morning Notification
-on:
-  schedule:
-    - cron: '0 23 * * *' # This is 7am SGT (UTC+8)
-jobs:
-  send-email:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send Mail
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{secrets.MAIL_USERNAME}}
-          password: ${{secrets.MAIL_PASSWORD}}
-          subject: "Daily Briefing: 7:00 AM"
-          body: "Good morning! Check your dashboard for today's tasks."
-          to: your-email@example.com
+# Morning Notification workflow disabled.
+# The Work Hub dashboard handles 7 AM SGT browser notifications directly.
+# This file is kept as a placeholder to avoid recreation.
+#
+# To re-enable email notifications, set repository secrets:
+#   MAIL_USERNAME  - your Gmail address
+#   MAIL_PASSWORD  - your Gmail App Password
+# then uncomment the workflow below.
+
+# name: Morning Notification
+# on:
+#   schedule:
+#     - cron: '0 23 * * *'
+# jobs:
+#   send-email:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: dawidd6/action-send-mail@v3
+#         with:
+#           server_address: smtp.gmail.com
+#           server_port: 465
+#           username: ${{secrets.MAIL_USERNAME}}
+#           password: ${{secrets.MAIL_PASSWORD}}
+#           subject: "Daily Briefing: 7:00 AM SGT"
+#           body: "Good morning! Check your Work Hub dashboard for today's meetings and tasks."
+#           to: ${{secrets.MAIL_USERNAME}}
