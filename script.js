@@ -235,8 +235,6 @@ function saveExpense(){const name=el('exp-name').value.trim(),amount=el('exp-amo
 
 // ============================================================
 // IMAGE PREPROCESSING
-// Detects dark vs light background and applies appropriate pipeline.
-// Dark backgrounds (Wise, banking apps) are inverted before processing.
 // ============================================================
 async function preprocessImageForOCR(dataUrl) {
   return new Promise((resolve) => {
@@ -250,68 +248,40 @@ async function preprocessImageForOCR(dataUrl) {
         w = Math.round(w * scale);
         h = Math.round(h * scale);
       }
-
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, w, h);
-
       const imageData = ctx.getImageData(0, 0, w, h);
       const data = imageData.data;
       const gray = new Uint8ClampedArray(w * h);
-
       for (let i = 0; i < w * h; i++) {
         const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
         gray[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
       }
-
-      // Detect background brightness from border pixels
       const borderSamples = [];
       const step = Math.max(1, Math.floor(w / 40));
-      for (let x = 0; x < w; x += step) {
-        borderSamples.push(gray[x]);
-        borderSamples.push(gray[(h - 1) * w + x]);
-      }
+      for (let x = 0; x < w; x += step) { borderSamples.push(gray[x]); borderSamples.push(gray[(h-1)*w+x]); }
       const vstep = Math.max(1, Math.floor(h / 40));
-      for (let y = 0; y < h; y += vstep) {
-        borderSamples.push(gray[y * w]);
-        borderSamples.push(gray[y * w + w - 1]);
-      }
-      borderSamples.sort((a, b) => a - b);
-      const medianBrightness = borderSamples[Math.floor(borderSamples.length / 2)];
-      const isDarkBackground = medianBrightness < 100;
-
-      if (isDarkBackground) {
-        for (let i = 0; i < gray.length; i++) gray[i] = 255 - gray[i];
-      }
-
-      const sorted = gray.slice().sort((a, b) => a - b);
-      const lo = sorted[Math.floor(sorted.length * 0.05)];
-      const hi = sorted[Math.floor(sorted.length * 0.95)];
+      for (let y = 0; y < h; y += vstep) { borderSamples.push(gray[y*w]); borderSamples.push(gray[y*w+w-1]); }
+      borderSamples.sort((a,b)=>a-b);
+      const isDark = borderSamples[Math.floor(borderSamples.length/2)] < 100;
+      if (isDark) { for (let i = 0; i < gray.length; i++) gray[i] = 255 - gray[i]; }
+      const sorted = gray.slice().sort((a,b)=>a-b);
+      const lo = sorted[Math.floor(sorted.length*0.05)], hi = sorted[Math.floor(sorted.length*0.95)];
       const range = hi - lo || 1;
-      for (let i = 0; i < gray.length; i++) {
-        gray[i] = Math.min(255, Math.max(0, Math.round(((gray[i] - lo) / range) * 255)));
-      }
-
-      const BLOCK = 18;
-      const BIAS  = isDarkBackground ? 8 : 10;
-      const out   = new Uint8ClampedArray(w * h);
+      for (let i = 0; i < gray.length; i++) gray[i] = Math.min(255, Math.max(0, Math.round(((gray[i]-lo)/range)*255)));
+      const BLOCK = 18, BIAS = isDark ? 8 : 10;
+      const out = new Uint8ClampedArray(w * h);
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
-          const x0 = Math.max(0, x - BLOCK), x1 = Math.min(w - 1, x + BLOCK);
-          const y0 = Math.max(0, y - BLOCK), y1 = Math.min(h - 1, y + BLOCK);
-          let sum = 0, count = 0;
-          for (let yy = y0; yy <= y1; yy++) {
-            for (let xx = x0; xx <= x1; xx++) { sum += gray[yy * w + xx]; count++; }
-          }
-          out[y * w + x] = gray[y * w + x] < (sum / count) - BIAS ? 0 : 255;
+          const x0=Math.max(0,x-BLOCK),x1=Math.min(w-1,x+BLOCK),y0=Math.max(0,y-BLOCK),y1=Math.min(h-1,y+BLOCK);
+          let sum=0,count=0;
+          for (let yy=y0;yy<=y1;yy++) for (let xx=x0;xx<=x1;xx++) { sum+=gray[yy*w+xx]; count++; }
+          out[y*w+x] = gray[y*w+x] < (sum/count) - BIAS ? 0 : 255;
         }
       }
-
-      for (let i = 0; i < w * h; i++) {
-        const v = out[i];
-        data[i * 4] = v; data[i * 4 + 1] = v; data[i * 4 + 2] = v; data[i * 4 + 3] = 255;
-      }
+      for (let i = 0; i < w*h; i++) { const v=out[i]; data[i*4]=v; data[i*4+1]=v; data[i*4+2]=v; data[i*4+3]=255; }
       ctx.putImageData(imageData, 0, 0);
       resolve(canvas.toDataURL('image/png'));
     };
@@ -322,50 +292,31 @@ async function preprocessImageForOCR(dataUrl) {
 
 // ============================================================
 // OCR LINE QUALITY CHECK
-// Returns true if a line looks like OCR noise (garbled logo text).
-// A line is considered noise if it has too many non-word tokens,
-// too many single characters, or a high ratio of digits/symbols
-// mixed with letters (e.g. "RRR WOON T3 SN I S5F eT SSR").
+// Returns true if a line looks like garbled logo/image text.
 // ============================================================
 function isNoiseLine(line) {
   if (!line || line.length < 2) return true;
   const tokens = line.trim().split(/\s+/);
-  if (tokens.length === 0) return true;
-  let noiseTokens = 0;
+  if (!tokens.length) return true;
+  let noise = 0;
   for (const t of tokens) {
-    // Single char tokens are noise
-    if (t.length === 1) { noiseTokens++; continue; }
-    // Tokens mixing letters and digits heavily (e.g. "T3", "S5F", "eT") are noise
-    const hasLetter = /[a-zA-Z]/.test(t);
-    const hasDigit  = /\d/.test(t);
-    if (hasLetter && hasDigit && t.length <= 4) { noiseTokens++; continue; }
-    // All-caps tokens shorter than 3 chars are likely noise
-    if (/^[A-Z]{1,2}$/.test(t)) { noiseTokens++; continue; }
+    if (t.length === 1) { noise++; continue; }
+    if (/[a-zA-Z]/.test(t) && /\d/.test(t) && t.length <= 4) { noise++; continue; }
+    if (/^[A-Z]{1,2}$/.test(t)) { noise++; continue; }
   }
-  // If more than 50% of tokens are noise, the whole line is noise
-  return noiseTokens / tokens.length > 0.5;
+  return noise / tokens.length > 0.5;
 }
 
 // ============================================================
 // RECEIPT TEXT PARSER
-// Handles paper receipts, banking app screenshots, and web orders.
-// Special logic for Shopify order pages where the merchant logo
-// is a stylised image that Tesseract cannot read reliably —
-// instead we infer the brand from product/item keywords in the
-// body of the receipt.
 // ============================================================
 function parseReceiptText(raw) {
-  const text = raw
-    .replace(/\r/g, '\n')
-    .replace(/[|l](?=\d)/g, '1')
-    .replace(/O(?=\d)/g, '0');
-
+  const text = raw.replace(/\r/g, '\n').replace(/[|l](?=\d)/g, '1').replace(/O(?=\d)/g, '0');
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const upper = text.toUpperCase();
 
   // ---- AMOUNT ----
-  let amount = '';
-  let fxDetected = false;
+  let amount = '', fxDetected = false;
 
   const sgdExplicit = [
     /total\s+sgd\s*\$?\s*([\d,]+\.\d{2})/i,
@@ -373,185 +324,163 @@ function parseReceiptText(raw) {
     /s\$\s*([\d,]+\.\d{2})/i,
     /\bsgd\s+([\d,]+\.\d{2})/i,
   ];
-  for (const re of sgdExplicit) {
-    const m = text.match(re);
-    if (m) { amount = m[1].replace(/,/g, ''); break; }
-  }
+  for (const re of sgdExplicit) { const m=text.match(re); if(m){amount=m[1].replace(/,/g,'');break;} }
 
   if (!amount) {
-    const totalPatterns = [
+    const tp = [
       /(?:grand\s+)?total\s+(?:amount\s+)?(?:due|paid|payable)?[\s:]*(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i,
       /amount\s+(?:due|paid|payable)[\s:]*(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i,
       /balance\s+(?:due)?[\s:]*(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i,
       /(?:net\s+)?total[\s:]*(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i,
     ];
-    for (const re of totalPatterns) {
-      const m = text.match(re);
-      if (m) { amount = m[1].replace(/,/g, ''); break; }
-    }
+    for (const re of tp) { const m=text.match(re); if(m){amount=m[1].replace(/,/g,'');break;} }
   }
 
   if (!amount) {
-    for (let i = 0; i < lines.length; i++) {
-      if (/^total\s*$/i.test(lines[i]) && i + 1 < lines.length) {
-        const m = lines[i + 1].match(/(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i);
-        if (m) { amount = m[1].replace(/,/g, ''); break; }
-      }
-    }
-  }
-
-  // FX rate conversion (banking apps like Wise)
-  if (!amount) {
-    const fxMatch = text.match(/1\s*([A-Z]{3})\s*[=:]\s*([\d.]+)\s*SGD/i);
-    if (fxMatch) {
-      const foreignCcy = fxMatch[1].toUpperCase();
-      const fxRate = parseFloat(fxMatch[2]);
-      const foreignAmtMatch = text.match(new RegExp(foreignCcy + '\\s*([\\d,]+\\.\\d{2})', 'i'));
-      if (foreignAmtMatch && fxRate > 0) {
-        const foreignAmt = parseFloat(foreignAmtMatch[1].replace(/,/g, ''));
-        amount = (foreignAmt * fxRate).toFixed(2);
-        fxDetected = true;
+    for (let i=0;i<lines.length;i++) {
+      if (/^total\s*$/i.test(lines[i]) && i+1<lines.length) {
+        const m=lines[i+1].match(/(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i);
+        if(m){amount=m[1].replace(/,/g,'');break;}
       }
     }
   }
 
   if (!amount) {
-    const myrLine = text.match(/MYR\s*([\d,]+\.\d{2})/i);
-    const standaloneNums = [];
-    const re = /\b(\d{1,6}\.\d{2})\b/g;
-    let m;
-    while ((m = re.exec(text)) !== null) standaloneNums.push(parseFloat(m[1]));
-    if (myrLine && standaloneNums.length) {
-      const myrAmt = parseFloat(myrLine[1].replace(/,/g, ''));
-      const candidates = standaloneNums.filter(n => n !== myrAmt && n > 1 && n < myrAmt);
-      if (candidates.length) amount = Math.max(...candidates).toFixed(2);
+    const fxm=text.match(/1\s*([A-Z]{3})\s*[=:]\s*([\d.]+)\s*SGD/i);
+    if (fxm) {
+      const fc=fxm[1].toUpperCase(), fr=parseFloat(fxm[2]);
+      const fam=text.match(new RegExp(fc+'\\s*([\\d,]+\\.\\d{2})','i'));
+      if(fam&&fr>0){amount=(parseFloat(fam[1].replace(/,/g,''))*fr).toFixed(2);fxDetected=true;}
     }
   }
 
   if (!amount) {
-    const candidates = [];
-    for (const line of lines) {
-      const m = line.match(/(?:\$|s\$|sgd|rm|myr|usd)?\s*([\d,]{1,8}\.\d{2})\s*$/i);
-      if (m) {
-        const v = parseFloat(m[1].replace(',', '.'));
-        if (v > 0.01 && v < 99999) candidates.push(v);
-      }
+    const myr=text.match(/MYR\s*([\d,]+\.\d{2})/i);
+    const nums=[]; const re=/\b(\d{1,6}\.\d{2})\b/g; let m;
+    while((m=re.exec(text))!==null) nums.push(parseFloat(m[1]));
+    if(myr&&nums.length){
+      const ma=parseFloat(myr[1].replace(/,/g,''));
+      const c=nums.filter(n=>n!==ma&&n>1&&n<ma);
+      if(c.length) amount=Math.max(...c).toFixed(2);
     }
-    if (candidates.length) amount = Math.max(...candidates).toFixed(2);
   }
 
   if (!amount) {
-    const all = [];
-    const re = /\b(\d{1,6}\.\d{2})\b/g;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-      const v = parseFloat(m[1]);
-      if (v > 0.5 && v < 99999) all.push(v);
+    const c=[];
+    for (const ln of lines) {
+      const m=ln.match(/(?:\$|s\$|sgd|rm|myr|usd)?\s*([\d,]{1,8}\.\d{2})\s*$/i);
+      if(m){const v=parseFloat(m[1].replace(',','.'));if(v>0.01&&v<99999)c.push(v);}
     }
-    if (all.length) amount = Math.max(...all).toFixed(2);
+    if(c.length) amount=Math.max(...c).toFixed(2);
+  }
+
+  if (!amount) {
+    const a=[]; const re=/\b(\d{1,6}\.\d{2})\b/g; let m;
+    while((m=re.exec(text))!==null){const v=parseFloat(m[1]);if(v>0.5&&v<99999)a.push(v);}
+    if(a.length) amount=Math.max(...a).toFixed(2);
   }
 
   // ---- DATE ----
   let date = '';
-  const mn = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
-  const datePatterns = [
-    new RegExp('(?:confirmed|completed\\s+on|ordered?\\s+on|placed\\s+on)[\\s:]+(?:(0?[1-9]|[12]\\d|3[01])\\s+(' + mn + ')[a-z]*(?:[,\\s]+(20\\d{2}))?|(' + mn + ')[a-z]*\\s+(0?[1-9]|[12]\\d|3[01])[,\\s]+(20\\d{2}))', 'i'),
-    new RegExp('\\b(' + mn + ')[a-z]*\\s+(0?[1-9]|[12]\\d|3[01])[,\\s]+(20\\d{2})\\b', 'i'),
+  const mn='jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
+  const dp=[
+    new RegExp('(?:confirmed|completed\\s+on|ordered?\\s+on|placed\\s+on)[\\s:]+(?:(0?[1-9]|[12]\\d|3[01])\\s+('+mn+')[a-z]*(?:[,\\s]+(20\\d{2}))?|('+mn+')[a-z]*\\s+(0?[1-9]|[12]\\d|3[01])[,\\s]+(20\\d{2}))','i'),
+    new RegExp('\\b('+mn+')[a-z]*\\s+(0?[1-9]|[12]\\d|3[01])[,\\s]+(20\\d{2})\\b','i'),
     /\b(20\d{2})[-\/](0?[1-9]|1[0-2])[-\/](0?[1-9]|[12]\d|3[01])\b/,
     /\b(0?[1-9]|[12]\d|3[01])[-\/](0?[1-9]|1[0-2])[-\/](20\d{2})\b/,
-    new RegExp('\\b(0?[1-9]|[12]\\d|3[01])\\s+(' + mn + ')[a-z]*\\s+(20\\d{2})\\b', 'i'),
-    new RegExp('\\b(0?[1-9]|[12]\\d|3[01])\\s+(' + mn + ')[a-z]*\\b', 'i'),
+    new RegExp('\\b(0?[1-9]|[12]\\d|3[01])\\s+('+mn+')[a-z]*\\s+(20\\d{2})\\b','i'),
+    new RegExp('\\b(0?[1-9]|[12]\\d|3[01])\\s+('+mn+')[a-z]*\\b','i'),
     /\b(0?[1-9]|[12]\d|3[01])[-\/](0?[1-9]|1[0-2])[-\/](\d{2})\b/,
   ];
-  for (const pat of datePatterns) {
-    const m = text.match(pat);
-    if (m) {
-      try {
-        let str = m[0].replace(/confirmed\s+on|completed\s+on|ordered?\s+on|placed\s+on/gi, '').trim();
-        str = str.replace(/\s+at\s+\d+:\d+\s*(am|pm)?/i, '');
-        str = str.replace(/-/g, '/');
-        if (!/20\d{2}/.test(str)) str = str + ' ' + new Date().getFullYear();
-        const d = new Date(str);
-        if (!isNaN(d.getTime()) && d.getFullYear() >= 2000) {
-          date = d.toISOString().split('T')[0]; break;
-        }
-      } catch (_) {}
+  for (const pat of dp) {
+    const m=text.match(pat);
+    if(m){
+      try{
+        let s=m[0].replace(/confirmed\s+on|completed\s+on|ordered?\s+on|placed\s+on/gi,'').trim();
+        s=s.replace(/\s+at\s+\d+:\d+\s*(am|pm)?/i,'').replace(/-/g,'/');
+        if(!/20\d{2}/.test(s)) s=s+' '+new Date().getFullYear();
+        const d=new Date(s);
+        if(!isNaN(d.getTime())&&d.getFullYear()>=2000){date=d.toISOString().split('T')[0];break;}
+      }catch(_){}
     }
   }
-  if (!date) date = todayStr();
+  if(!date) date=todayStr();
 
   // ---- MERCHANT NAME ----
+  // Strategy: search the ENTIRE text for brand fingerprints first.
+  // This handles cases where the logo is unreadable but brand name
+  // or unique menu items appear elsewhere in the document.
+  //
+  // Waa Cow specifically: their logo renders as garbage ("RRR WOON...")
+  // but their menu items (Mentaiko Wagyu Beef, Original Chirashi,
+  // Yuzu Foie Gras Wagyu Beef) are printed in plain text and are unique.
+  // We match on individual keywords — no compound regex needed.
 
-  // Step 1: Check the full OCR text for known brand names anywhere in the document.
-  // This is the most reliable method — works even if the top logo line is garbled.
   const brandMap = [
-    // Exact brand matches — checked against full text
-    [/\bwise\b/i, 'Wise'],
-    [/grab\s*(?:food|mart|express|taxi|car|pay)?/i, 'Grab'],
-    [/gojek/i, 'Gojek'],
-    [/foodpanda/i, 'Foodpanda'],
-    [/deliveroo/i, 'Deliveroo'],
-    [/lazada/i, 'Lazada'],
-    [/shopee/i, 'Shopee'],
-    // Waa Cow: logo is often unreadable, but order items are distinctive
-    // "Mentaiko Wagyu", "Chirashi", "Yuzu Foie Gras", "Original Wagyu" are Waa Cow menu items
-    [/waa\s*cow|waacow/i, 'Waa Cow'],
-    [/mentaiko\s*wagyu|yuzu\s*foie\s*gras|original\s*chirashi|wagyu\s*beef.*\$22|chirashi.*raw/i, 'Waa Cow'],
-    [/ntuc\s*(?:fairprice)?/i, 'NTUC FairPrice'],
-    [/fairprice/i, 'NTUC FairPrice'],
-    [/cold\s*storage/i, 'Cold Storage'],
-    [/sheng\s*siong/i, 'Sheng Siong'],
-    [/don\s*don\s*donki|donki/i, 'Don Don Donki'],
-    [/giant/i, 'Giant'],
-    [/7[\s-]?eleven/i, '7-Eleven'],
-    [/cheers/i, 'Cheers'],
-    [/watsons/i, 'Watsons'],
-    [/guardian/i, 'Guardian'],
-    [/starbucks/i, 'Starbucks'],
-    [/coffee\s*bean/i, 'The Coffee Bean'],
-    [/ya\s*kun/i, 'Ya Kun'],
-    [/toast\s*box/i, 'Toast Box'],
-    [/old\s*chang\s*kee/i, 'Old Chang Kee'],
-    [/hakka\s*restaurant/i, 'Hakka Restaurant'],
-    [/mcdonald['s]?|mcdonalds/i, "McDonald's"],
-    [/burger\s*king/i, 'Burger King'],
-    [/\bkfc\b/i, 'KFC'],
-    [/subway/i, 'Subway'],
-    [/texas\s*chicken/i, 'Texas Chicken'],
-    [/bengawan\s*solo/i, 'Bengawan Solo'],
-    [/prima\s*deli/i, 'Prima Deli'],
-    [/\bikea\b/i, 'IKEA'],
-    [/\bcourts\b/i, 'Courts'],
-    [/harvey\s*norman/i, 'Harvey Norman'],
-    [/popular\s*bookstore/i, 'Popular Bookstore'],
-    [/office\s*depot/i, 'Office Depot'],
-    [/challenger/i, 'Challenger'],
-    [/best\s*denki/i, 'Best Denki'],
-    [/uniqlo/i, 'Uniqlo'],
-    [/\bzara\b/i, 'Zara'],
-    [/\bh&m\b|h and m/i, 'H&M'],
-    [/capitaland/i, 'CapitaLand Mall'],
-    [/\bclinic\b/i, 'Medical Clinic'],
-    [/hospital/i, 'Hospital'],
-    [/pharmacy/i, 'Pharmacy'],
+    // Each entry: [regex tested on full uppercased text, brand name]
+    [/\bWISE\b/, 'Wise'],
+    [/GRAB\s*(?:FOOD|MART|EXPRESS|TAXI|CAR|PAY)?/, 'Grab'],
+    [/GOJEK/, 'Gojek'],
+    [/FOODPANDA/, 'Foodpanda'],
+    [/DELIVEROO/, 'Deliveroo'],
+    [/LAZADA/, 'Lazada'],
+    [/SHOPEE/, 'Shopee'],
+    // Waa Cow: logo unreadable — match on unique menu item words instead
+    [/WAA\s*COW|WAACOW/, 'Waa Cow'],
+    [/MENTAIKO\s+WAGYU/, 'Waa Cow'],
+    [/YUZU\s+FOIE\s+GRAS/, 'Waa Cow'],
+    [/ORIGINAL\s+CHIRASHI/, 'Waa Cow'],
+    [/ORIGINAL\s+WAGYU\s+BEEF/, 'Waa Cow'],
+    // Standard SG brands
+    [/NTUC\s*(?:FAIRPRICE)?/, 'NTUC FairPrice'],
+    [/FAIRPRICE/, 'NTUC FairPrice'],
+    [/COLD\s*STORAGE/, 'Cold Storage'],
+    [/SHENG\s*SIONG/, 'Sheng Siong'],
+    [/DON\s*DON\s*DONKI|DONKI/, 'Don Don Donki'],
+    [/\bGIANT\b/, 'Giant'],
+    [/7[\s-]?ELEVEN/, '7-Eleven'],
+    [/\bCHEERS\b/, 'Cheers'],
+    [/WATSONS/, 'Watsons'],
+    [/GUARDIAN/, 'Guardian'],
+    [/STARBUCKS/, 'Starbucks'],
+    [/COFFEE\s*BEAN/, 'The Coffee Bean'],
+    [/YA\s*KUN/, 'Ya Kun'],
+    [/TOAST\s*BOX/, 'Toast Box'],
+    [/OLD\s*CHANG\s*KEE/, 'Old Chang Kee'],
+    [/HAKKA\s*RESTAURANT/, 'Hakka Restaurant'],
+    [/MCDONALD|MCDONALDS/, "McDonald's"],
+    [/BURGER\s*KING/, 'Burger King'],
+    [/\bKFC\b/, 'KFC'],
+    [/\bSUBWAY\b/, 'Subway'],
+    [/TEXAS\s*CHICKEN/, 'Texas Chicken'],
+    [/BENGAWAN\s*SOLO/, 'Bengawan Solo'],
+    [/PRIMA\s*DELI/, 'Prima Deli'],
+    [/\bIKEA\b/, 'IKEA'],
+    [/\bCOURTS\b/, 'Courts'],
+    [/HARVEY\s*NORMAN/, 'Harvey Norman'],
+    [/POPULAR\s*BOOKSTORE/, 'Popular Bookstore'],
+    [/OFFICE\s*DEPOT/, 'Office Depot'],
+    [/CHALLENGER/, 'Challenger'],
+    [/BEST\s*DENKI/, 'Best Denki'],
+    [/\bUNIQLO\b/, 'Uniqlo'],
+    [/\bZARA\b/, 'Zara'],
+    [/\bH&M\b/, 'H&M'],
+    [/CAPITALAND/, 'CapitaLand Mall'],
   ];
 
   let name = '';
-  // Search all text (not just first lines) so brand names in the receipt body are found
+  // Test each brand pattern against the full uppercased text
   for (const [re, label] of brandMap) {
-    if (re.test(upper) || re.test(lines.slice(0, 20).join(' ').toUpperCase())) {
-      name = label; break;
-    }
+    if (re.test(upper)) { name = label; break; }
   }
 
-  // Step 2: For Shopify orders specifically — detect by "Order #" + "preparing items for shipping"
-  // and use the first readable non-noise non-order line as the brand
+  // Shopify order fallback: if we see "Order #" + Shopify-style text
+  // but no brand matched above, try readable lines near the top
   if (!name) {
-    const isShopifyOrder = /order\s*#\s*\d+/i.test(text) &&
-      /preparing.*items.*shipping|buy\s*again|order\s*discount|mastercard|visa/i.test(text);
+    const isShopifyOrder = /ORDER\s*#\s*\d+/.test(upper) &&
+      /PREPARING.*ITEMS.*SHIPPING|BUY\s*AGAIN|ORDER\s*DISCOUNT|MASTERCARD|VISA/.test(upper);
     if (isShopifyOrder) {
-      // Try first non-noise, non-order lines — brand name is often in the top 6 lines
-      for (let i = 0; i < Math.min(lines.length, 6); i++) {
+      for (let i = 0; i < Math.min(lines.length, 8); i++) {
         const ln = lines[i];
         if (ln.length < 3) continue;
         if (/order|#\d|confirmed|preparing|shipping|buy again|\d{4,}/i.test(ln)) continue;
@@ -559,21 +488,20 @@ function parseReceiptText(raw) {
         const clean = ln.replace(/[^\w\s&'.,\-]/g, '').trim();
         if (clean.length >= 3 && clean.length <= 50) { name = clean; break; }
       }
-      // If still no name, label generically as "Online Order"
       if (!name) name = 'Online Order';
     }
   }
 
-  // Step 3: Fallback — first clean non-noise line anywhere in the receipt
+  // General fallback: first clean, non-noise line
   if (!name) {
-    const skipLine = /^(\d[\d\s\-\/]+$|receipt|invoice|tax\s*invoice|order\s*#|tel:|phone:|fax:|gst|uen|reg\s*no|website|www\.|http|address:|thank\s*you|page\s+\d|cashier|server|table\s*\d|pos\s+|ref\s*[:#]|#\d|date[:\s]|time[:\s]|receipt\s*no|bill\s*no|invoice\s*no|trans[a-z]*\s*[:#]|merchant\s*name|transaction\s*id|fx\s*rate|completed)/i;
+    const skip = /^(\d[\d\s\-\/]+$|receipt|invoice|tax\s*invoice|order\s*#|tel:|phone:|fax:|gst|uen|reg\s*no|website|www\.|http|address:|thank\s*you|page\s+\d|cashier|server|table\s*\d|pos\s+|ref\s*[:#]|#\d|date[:\s]|time[:\s]|receipt\s*no|bill\s*no|invoice\s*no|trans[a-z]*\s*[:#]|merchant\s*name|transaction\s*id|fx\s*rate|completed)/i;
     for (let i = 0; i < Math.min(lines.length, 15); i++) {
       const ln = lines[i];
       if (ln.length <= 2) continue;
-      if (skipLine.test(ln)) continue;
+      if (skip.test(ln)) continue;
       if (/^\d+(\.\d+)?$/.test(ln)) continue;
       if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(ln)) continue;
-      if (isNoiseLine(ln)) continue;  // skip garbled logo lines
+      if (isNoiseLine(ln)) continue;
       const clean = ln.replace(/[^\w\s&'.,\-]/g, '').trim();
       if (clean.length >= 3) { name = clean.slice(0, 50); break; }
     }
@@ -582,7 +510,7 @@ function parseReceiptText(raw) {
   if (!name) name = 'Receipt';
 
   // ---- PURPOSE ----
-  const purposeMap = [
+  const pm = [
     [/grab\s*(?:car|taxi|hitch|premium|xl|exec)|gojek|uber|lyft|taxi|cab\b|car\s*hire|car\s*rental/i, 'Transport'],
     [/grab\s*food|foodpanda|deliveroo|food\s*delivery|deliver/i, 'Meals & Entertainment'],
     [/mrt|bus\s*(?:ticket|fare)|train|commut|toll|ez.?link|transitlink/i, 'Transport'],
@@ -600,12 +528,9 @@ function parseReceiptText(raw) {
     [/software|subscription|saas|cloud|hosting|domain|aws/i, 'Software & Subscriptions'],
     [/singtel|starhub|m1\b|circles?\.life|mobile\s*plan|broadband/i, 'Software & Subscriptions'],
   ];
-
   let purpose = 'Business Expense';
   const st = upper + ' ' + name.toUpperCase();
-  for (const [re, label] of purposeMap) {
-    if (re.test(st)) { purpose = label; break; }
-  }
+  for (const [re, label] of pm) { if (re.test(st)) { purpose = label; break; } }
 
   return { name, amount, date, purpose, fxDetected };
 }
@@ -616,115 +541,60 @@ function parseReceiptText(raw) {
 async function processReceipt(input) {
   const file = input.files[0]; if (!file) return;
   const aiEl = el('ai-processing'), area = el('upload-area');
-
-  const dataUrl = await new Promise((res, rej) => {
-    const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
-  });
+  const dataUrl = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
   currentReceiptDataUrl = dataUrl;
-
-  area.style.backgroundImage = 'url(' + dataUrl + ')';
-  area.style.backgroundSize = 'cover';
-  area.style.backgroundPosition = 'center';
-  area.style.minHeight = '120px';
-  area.style.borderColor = '#FF3B7F';
-  el('upload-icon-wrap').style.display = 'none';
-  el('upload-text').textContent = '\u2713 ' + file.name;
-  el('upload-sub-text').textContent = 'Scanning...';
-
-  if (getApiKey()) {
-    await scanWithClaude(dataUrl, file, getApiKey(), aiEl);
-  } else {
-    await scanWithTesseract(dataUrl, file, aiEl);
-  }
+  area.style.backgroundImage='url('+dataUrl+')';area.style.backgroundSize='cover';area.style.backgroundPosition='center';area.style.minHeight='120px';area.style.borderColor='#FF3B7F';
+  el('upload-icon-wrap').style.display='none';el('upload-text').textContent='\u2713 '+file.name;el('upload-sub-text').textContent='Scanning...';
+  if (getApiKey()) { await scanWithClaude(dataUrl,file,getApiKey(),aiEl); } else { await scanWithTesseract(dataUrl,file,aiEl); }
 }
 
 async function scanWithTesseract(dataUrl, file, aiEl) {
-  const pw  = el('ocr-progress-wrap');
-  const bar = el('ocr-bar');
-  const pct = el('ocr-pct');
-  const st  = el('ocr-status-text');
-  const rb  = el('ocr-raw-box');
-  const rp  = el('ocr-raw-text');
-
-  pw.style.display = 'block'; rb.style.display = 'none'; aiEl.classList.remove('visible');
-
+  const pw=el('ocr-progress-wrap'),bar=el('ocr-bar'),pct=el('ocr-pct'),st=el('ocr-status-text'),rb=el('ocr-raw-box'),rp=el('ocr-raw-text');
+  pw.style.display='block';rb.style.display='none';aiEl.classList.remove('visible');
   try {
-    st.textContent = 'Enhancing image...';
-    bar.style.width = '5%'; pct.textContent = '5%';
-    const processedDataUrl = await preprocessImageForOCR(dataUrl);
-
-    const result = await Tesseract.recognize(
-      processedDataUrl,
-      'eng',
-      {
-        logger: function(info) {
-          if (info.status === 'recognizing text') {
-            const p = Math.round((info.progress || 0) * 100);
-            bar.style.width = p + '%'; pct.textContent = p + '%';
-            st.textContent = 'Reading receipt... ' + p + '%';
-          } else if (info.status === 'loading tesseract core') {
-            st.textContent = 'Loading OCR engine...';
-          } else if (info.status === 'initializing tesseract') {
-            st.textContent = 'Initialising OCR...';
-          } else if (info.status === 'loading language traineddata') {
-            st.textContent = 'Loading language data...';
-          }
-        },
-        tessedit_pageseg_mode: '6',
-        tessedit_ocr_engine_mode: '1',
-        preserve_interword_spaces: '1',
-      }
-    );
-
-    pw.style.display = 'none';
-    const rawText = result.data.text || '';
-
-    if (rawText.trim().length > 0) { rp.textContent = rawText; rb.style.display = 'block'; }
-    if (rawText.trim().length < 3) throw new Error('OCR could not read text. Try a clearer photo.');
-
-    const parsed = parseReceiptText(rawText);
-    el('exp-name').value    = parsed.name    || '';
-    el('exp-amount').value  = parsed.amount  || '';
-    el('exp-date').value    = parsed.date    || todayStr();
-    el('exp-purpose').value = parsed.purpose || '';
-
-    el('upload-sub-text').textContent = 'Click to change';
-
-    const filledCount = [parsed.name, parsed.amount].filter(Boolean).length;
-    if (filledCount === 2) {
-      const fxNote = parsed.fxDetected ? ' (converted from foreign currency \u2014 please verify)' : '';
-      aiEl.textContent      = '\u2713 Fields auto-filled!' + fxNote + ' Review and adjust if needed.';
-      aiEl.style.background = parsed.fxDetected ? '#fffbeb' : '#ecfdf5';
-      aiEl.style.color      = parsed.fxDetected ? '#b45309' : '#15803d';
-    } else if (filledCount === 1) {
-      aiEl.textContent      = '\u26a0\ufe0f Partial fill \u2014 some fields not detected. Check raw text below.';
-      aiEl.style.background = '#fffbeb';
-      aiEl.style.color      = '#b45309';
+    st.textContent='Enhancing image...';bar.style.width='5%';pct.textContent='5%';
+    const processed = await preprocessImageForOCR(dataUrl);
+    const result = await Tesseract.recognize(processed,'eng',{
+      logger:function(info){
+        if(info.status==='recognizing text'){const p=Math.round((info.progress||0)*100);bar.style.width=p+'%';pct.textContent=p+'%';st.textContent='Reading receipt... '+p+'%';}
+        else if(info.status==='loading tesseract core')st.textContent='Loading OCR engine...';
+        else if(info.status==='initializing tesseract')st.textContent='Initialising OCR...';
+        else if(info.status==='loading language traineddata')st.textContent='Loading language data...';
+      },
+      tessedit_pageseg_mode:'6',tessedit_ocr_engine_mode:'1',preserve_interword_spaces:'1',
+    });
+    pw.style.display='none';
+    const rawText=result.data.text||'';
+    if(rawText.trim().length>0){rp.textContent=rawText;rb.style.display='block';}
+    if(rawText.trim().length<3)throw new Error('OCR could not read text. Try a clearer photo.');
+    const parsed=parseReceiptText(rawText);
+    el('exp-name').value=parsed.name||'';el('exp-amount').value=parsed.amount||'';el('exp-date').value=parsed.date||todayStr();el('exp-purpose').value=parsed.purpose||'';
+    el('upload-sub-text').textContent='Click to change';
+    const filled=[parsed.name,parsed.amount].filter(Boolean).length;
+    if(filled===2){
+      const fx=parsed.fxDetected?' (converted from foreign currency \u2014 please verify)':'';
+      aiEl.textContent='\u2713 Fields auto-filled!'+fx+' Review and adjust if needed.';
+      aiEl.style.background=parsed.fxDetected?'#fffbeb':'#ecfdf5';aiEl.style.color=parsed.fxDetected?'#b45309':'#15803d';
+    } else if(filled===1){
+      aiEl.textContent='\u26a0\ufe0f Partial fill \u2014 some fields not detected. Check raw text below.';
+      aiEl.style.background='#fffbeb';aiEl.style.color='#b45309';
     } else {
-      aiEl.textContent      = '\u26a0\ufe0f Could not extract fields. Try a clearer, flat photo with good lighting.';
-      aiEl.style.background = '#fff0f0';
-      aiEl.style.color      = '#cc0000';
+      aiEl.textContent='\u26a0\ufe0f Could not extract fields. Try a clearer, flat photo with good lighting.';
+      aiEl.style.background='#fff0f0';aiEl.style.color='#cc0000';
     }
     aiEl.classList.add('visible');
-
-  } catch (err) {
-    pw.style.display = 'none';
-    aiEl.textContent      = '\u26a0\ufe0f ' + (err.message || 'Scan failed.');
-    aiEl.style.background = '#fff0f0';
-    aiEl.style.color      = '#cc0000';
-    aiEl.classList.add('visible');
-    el('upload-sub-text').textContent = 'Click to change';
+  } catch(err) {
+    pw.style.display='none';aiEl.textContent='\u26a0\ufe0f '+(err.message||'Scan failed.');
+    aiEl.style.background='#fff0f0';aiEl.style.color='#cc0000';aiEl.classList.add('visible');
+    el('upload-sub-text').textContent='Click to change';
   }
 }
 
 async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
-  aiEl.textContent      = '\ud83e\udd16 Claude AI reading receipt...';
-  aiEl.style.background = '#FFE0ED';
-  aiEl.style.color      = '#CC2B66';
-  aiEl.classList.add('visible');
+  aiEl.textContent='\ud83e\udd16 Claude AI reading receipt...';aiEl.style.background='#FFE0ED';aiEl.style.color='#CC2B66';aiEl.classList.add('visible');
   try {
-    const b64 = dataUrl.split(',')[1], mt = file.type || 'image/png';
-    const prompt = `You are reading a receipt, order confirmation, or payment screenshot. Extract the following and return ONLY a JSON object — no extra text, no markdown.
+    const b64=dataUrl.split(',')[1],mt=file.type||'image/png';
+    const prompt=`You are reading a receipt, order confirmation, or payment screenshot. Extract the following and return ONLY a JSON object — no extra text, no markdown.
 
 Rules:
 - "name": the merchant or store name (e.g. "Grab", "Hakka Restaurant", "Waa Cow", "NTUC FairPrice"). If the logo is unclear but you can see the menu items or order details, infer the brand from those.
@@ -736,47 +606,14 @@ Rules:
 - "purpose": one of: Transport, Meals & Entertainment, Groceries, Office Supplies, Accommodation, Medical, Software & Subscriptions, Training & Education, Business Expense
 
 Return exactly: {"name":"...","amount":"...","date":"...","purpose":"..."}`;
-
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: mt, data: b64 } },
-          { type: 'text', text: prompt }
-        ]}]
-      })
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      if (resp.status === 401) throw new Error('Invalid API key.');
-      if (resp.status === 429) throw new Error('Rate limit hit.');
-      throw new Error((err.error && err.error.message) || 'HTTP ' + resp.status);
-    }
-    const data = await resp.json();
-    const txt = (data.content || []).map(c => c.text || '').join('');
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:300,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:prompt}]}]})});
+    if(!resp.ok){const err=await resp.json().catch(()=>({}));if(resp.status===401)throw new Error('Invalid API key.');if(resp.status===429)throw new Error('Rate limit hit.');throw new Error((err.error&&err.error.message)||'HTTP '+resp.status);}
+    const data=await resp.json(),txt=(data.content||[]).map(c=>c.text||'').join('');
     let parsed;
-    try { parsed = JSON.parse(txt.replace(/```json|```/g, '').trim()); }
-    catch (_) { const mm = txt.match(/\{[\s\S]*?\}/); if (!mm) throw new Error('Bad response'); parsed = JSON.parse(mm[0]); }
-    if (parsed.name)    el('exp-name').value    = parsed.name;
-    if (parsed.amount)  el('exp-amount').value  = String(parsed.amount).replace(/[^0-9.]/g, '');
-    if (parsed.date)    el('exp-date').value    = parsed.date;
-    if (parsed.purpose) el('exp-purpose').value = parsed.purpose;
-    el('upload-sub-text').textContent = 'Click to change';
-    aiEl.textContent      = '\u2713 Claude auto-filled fields.';
-    aiEl.style.background = '#ecfdf5';
-    aiEl.style.color      = '#15803d';
-  } catch (err) {
-    console.warn('Claude failed, falling back to Tesseract:', err.message);
-    await scanWithTesseract(dataUrl, file, aiEl);
-  }
+    try{parsed=JSON.parse(txt.replace(/```json|```/g,'').trim());}catch(_){const mm=txt.match(/\{[\s\S]*?\}/);if(!mm)throw new Error('Bad response');parsed=JSON.parse(mm[0]);}
+    if(parsed.name)el('exp-name').value=parsed.name;if(parsed.amount)el('exp-amount').value=String(parsed.amount).replace(/[^0-9.]/g,'');if(parsed.date)el('exp-date').value=parsed.date;if(parsed.purpose)el('exp-purpose').value=parsed.purpose;
+    el('upload-sub-text').textContent='Click to change';aiEl.textContent='\u2713 Claude auto-filled fields.';aiEl.style.background='#ecfdf5';aiEl.style.color='#15803d';
+  } catch(err){console.warn('Claude failed, falling back to Tesseract:',err.message);await scanWithTesseract(dataUrl,file,aiEl);}
 }
 
 // CALENDAR
