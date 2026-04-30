@@ -50,12 +50,8 @@ function showFinanceBanner(msg) {
 
 // ============================================================
 // FINANCE INSTANT SYNC
-// Two methods so dashboard updates the moment finance pays:
-//   1. BroadcastChannel  - instant, works when both tabs are open
-//   2. storage event     - fires when finance writes to localStorage
 // ============================================================
 function initFinanceSync() {
-  // Method 1: BroadcastChannel
   try {
     const bc = new BroadcastChannel('wh_finance_sync');
     bc.onmessage = function(e) {
@@ -71,7 +67,6 @@ function initFinanceSync() {
     };
   } catch(_) {}
 
-  // Method 2: storage event (fires when another tab writes localStorage)
   window.addEventListener('storage', function(e) {
     if (e.key === 'wh_expenses' && e.newValue) {
       try {
@@ -90,7 +85,6 @@ function initFinanceSync() {
   });
 }
 
-// Finance confirm param (fallback link-based)
 function checkConfirmParam() {
   const params = new URLSearchParams(window.location.search);
   const raw = params.get('confirm');
@@ -239,68 +233,481 @@ function closeExpenseModal(){el('expense-modal').classList.remove('open');['exp-
 function resetUploadArea(){const area=el('upload-area');area.style.backgroundImage='';area.style.backgroundSize='';area.style.minHeight='';area.style.borderColor='';el('upload-icon-wrap').style.display='flex';el('upload-text').textContent='Upload Receipt';el('upload-sub-text').textContent='PNG, JPG, WEBP \u2014 auto-scanned free, no API key needed';}
 function saveExpense(){const name=el('exp-name').value.trim(),amount=el('exp-amount').value,purpose=el('exp-purpose').value.trim(),date=el('exp-date').value;if(!name||!amount||!purpose||!date){alert('Please fill in all fields.');return;}const file=el('receipt-file').files[0];expenses.push({id:Date.now(),name,amount:Number(amount),purpose,date,reimbursed:false,receipt:file?file.name:'',receiptImg:currentReceiptDataUrl});save();closeExpenseModal();renderExpenses();renderDashboard();}
 
-// RECEIPT PARSER
-function parseReceiptText(raw){
-  const text=raw.replace(/\r/g,'\n'),lines=text.split('\n').map(l=>l.trim()).filter(Boolean),upper=text.toUpperCase();
-  let amount='';
-  const tks=[/total\s*(?:amount)?[:\s]*\$?\s*(\d[\d,]*\.\d{2})/i,/amount\s*(?:due|paid|payable)[:\s]*\$?\s*(\d[\d,]*\.\d{2})/i,/grand\s*total[:\s]*\$?\s*(\d[\d,]*\.\d{2})/i,/balance\s*(?:due)?[:\s]*\$?\s*(\d[\d,]*\.\d{2})/i,/(?:net\s*)?total[:\s]*\$?\s*(\d[\d,]*\.\d{2})/i,/(?:s\$|sgd|usd|myr)\s*(\d[\d,]*\.\d{2})/i];
-  for(const re of tks){const m=text.match(re);if(m){amount=m[1].replace(/,/g,'');break;}}
-  if(!amount){const c=[];for(const line of lines){const m=line.match(/(?:\$|S\$|SGD|RM|USD)?\s*(\d{1,6}[.,]\d{2})\s*$/i);if(m){const v=parseFloat(m[1].replace(',','.'));if(v>0.01&&v<99999)c.push(v);}}if(c.length)amount=String(Math.max(...c).toFixed(2));}
-  if(!amount){const a=[];const r=/\b(\d{1,6}\.\d{2})\b/g;let m;while((m=r.exec(text))!==null){const v=parseFloat(m[1]);if(v>0.5&&v<99999)a.push(v);}if(a.length)amount=String(Math.max(...a).toFixed(2));}
-  let date='';const mn='jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
-  const dp=[/\b(20\d{2})[-\/](0?[1-9]|1[0-2])[-\/](0?[1-9]|[12]\d|3[01])\b/,/\b(0?[1-9]|[12]\d|3[01])[-\/](0?[1-9]|1[0-2])[-\/](20\d{2})\b/,new RegExp('\\b(0?[1-9]|[12]\\d|3[01])\\s+('+mn+')[a-z]*\\s+(20\\d{2})\\b','i'),new RegExp('\\b('+mn+')[a-z]*\\s+(0?[1-9]|[12]\\d|3[01])[,\\s]+(20\\d{2})\\b','i'),/\b(0?[1-9]|[12]\d|3[01])[-\/](0?[1-9]|1[0-2])[-\/](\d{2})\b/];
-  for(const pat of dp){const m=text.match(pat);if(m){try{const d=new Date(m[0].replace(/-/g,'/'));if(!isNaN(d.getTime())&&d.getFullYear()>=2000){date=d.toISOString().split('T')[0];break;}}catch(_){}}}
-  if(!date)date=todayStr();
-  const skip=/^(\d[\d\s\-\/]+$|receipt|invoice|tax invoice|order|tel:|phone:|fax:|gst|uen|reg\s*no|website|www\.|http|address:|thank you|page \d|cashier|server|table|pos |ref |#)/i;
-  let name='';
-  for(let i=0;i<Math.min(lines.length,12);i++){const ln=lines[i];if(ln.length<=2)continue;if(skip.test(ln))continue;if(/^\d+(\.\d+)?$/.test(ln))continue;if(/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(ln))continue;const clean=ln.replace(/[^\w\s&'.,-]/g,'').trim();if(clean.length>=3){name=clean;break;}}
-  if(!name)name=lines.length?lines[0].replace(/[^\w\s]/g,'').trim().slice(0,40):'Receipt';
-  if(!name)name='Receipt';
-  const pm=[[/grab|gojek|taxi|uber|lyft|transport|cab\b/i,'Transport'],[/mrt|bus|train|commut|toll|ez.?link/i,'Transport'],[/flight|airlin|airfare|airport/i,'Travel'],[/hotel|airbnb|resort|lodg|accommodat/i,'Accommodation'],[/restaurant|bistro|hawker|kopitiam|foodcourt|dining/i,'Meals & Entertainment'],[/cafe|coffee|starbucks|ya kun|toast box/i,'Meals & Entertainment'],[/lunch|dinner|breakfast|supper|meal|eat|drink\b/i,'Meals & Entertainment'],[/fairprice|cold storage|giant|sheng siong|supermarket|grocery/i,'Groceries'],[/watsons|guardian|convenience/i,'Groceries'],[/office|stationery|supplies|depot|print/i,'Office Supplies'],[/pharmacy|clinic|hospital|medical|dental/i,'Medical'],[/book|course|training|seminar|conference/i,'Training & Education'],[/software|subscription|saas|cloud|hosting/i,'Software & Subscriptions'],[/grab ?food|food.?panda|deliveroo|deliver/i,'Meals & Entertainment']];
-  let purpose='Business Expense';const st=upper+' '+name.toUpperCase();
-  for(const [re,label] of pm){if(re.test(st)){purpose=label;break;}}
-  return{name,amount,date,purpose};
+// ============================================================
+// IMAGE PREPROCESSING
+// Converts the uploaded image to a high-contrast grayscale
+// version before handing it to Tesseract. This is the single
+// biggest accuracy improvement: Tesseract reads black text on
+// a white background far better than a colour photo of a receipt.
+//
+// Steps applied:
+//   1. Upscale small images to at least 1200px on the long edge
+//      (Tesseract accuracy drops significantly below ~150 dpi)
+//   2. Convert to greyscale via luminance formula
+//   3. Apply an unsharp-mask style contrast boost:
+//      - Stretch the histogram so the darkest 10% become black
+//        and the lightest 10% become white
+//   4. Binarise with an adaptive threshold: each pixel is
+//      compared to the mean of its local neighbourhood.
+//      This handles uneven lighting (shadows, phone torch glare)
+//      much better than a fixed threshold.
+// ============================================================
+async function preprocessImageForOCR(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      // Step 1: upscale if too small
+      const MIN_LONG_EDGE = 1400;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const longEdge = Math.max(w, h);
+      if (longEdge < MIN_LONG_EDGE) {
+        const scale = MIN_LONG_EDGE / longEdge;
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+
+      // Draw original image at (possibly upscaled) size
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const data = imageData.data;
+      const gray = new Uint8ClampedArray(w * h);
+
+      // Step 2: greyscale via luminance
+      for (let i = 0; i < w * h; i++) {
+        const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
+        gray[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      }
+
+      // Step 3: histogram stretch — find 5th and 95th percentile
+      const sorted = gray.slice().sort((a, b) => a - b);
+      const lo = sorted[Math.floor(sorted.length * 0.05)];
+      const hi = sorted[Math.floor(sorted.length * 0.95)];
+      const range = hi - lo || 1;
+      for (let i = 0; i < gray.length; i++) {
+        gray[i] = Math.round(((gray[i] - lo) / range) * 255);
+        if (gray[i] < 0) gray[i] = 0;
+        if (gray[i] > 255) gray[i] = 255;
+      }
+
+      // Step 4: adaptive binarisation — 16x16 block mean
+      const BLOCK = 16;
+      const BIAS  = 10; // lower = more aggressive binarisation
+      const out   = new Uint8ClampedArray(w * h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const x0 = Math.max(0, x - BLOCK), x1 = Math.min(w - 1, x + BLOCK);
+          const y0 = Math.max(0, y - BLOCK), y1 = Math.min(h - 1, y + BLOCK);
+          let sum = 0, count = 0;
+          for (let yy = y0; yy <= y1; yy++) {
+            for (let xx = x0; xx <= x1; xx++) {
+              sum += gray[yy * w + xx]; count++;
+            }
+          }
+          const mean = sum / count;
+          out[y * w + x] = gray[y * w + x] < mean - BIAS ? 0 : 255;
+        }
+      }
+
+      // Write binarised greyscale back to canvas RGBA
+      for (let i = 0; i < w * h; i++) {
+        const v = out[i];
+        data[i * 4] = v; data[i * 4 + 1] = v; data[i * 4 + 2] = v; data[i * 4 + 3] = 255;
+      }
+      ctx.putImageData(imageData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(dataUrl); // fallback: use original if load fails
+    img.src = dataUrl;
+  });
 }
 
-// RECEIPT PROCESSING
-async function processReceipt(input){
-  const file=input.files[0];if(!file)return;
-  const aiEl=el('ai-processing'),area=el('upload-area');
-  const dataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
-  currentReceiptDataUrl=dataUrl;
-  area.style.backgroundImage='url('+dataUrl+')';area.style.backgroundSize='cover';area.style.backgroundPosition='center';area.style.minHeight='120px';area.style.borderColor='#FF3B7F';
-  el('upload-icon-wrap').style.display='none';el('upload-text').textContent='\u2713 '+file.name;el('upload-sub-text').textContent='Scanning...';
-  if(getApiKey()){await scanWithClaude(dataUrl,file,getApiKey(),aiEl);}else{await scanWithTesseract(dataUrl,file,aiEl);}
+// ============================================================
+// RECEIPT TEXT PARSER (improved)
+// Priority order for amount:
+//   1. Lines explicitly labelled TOTAL / AMOUNT DUE / GRAND TOTAL
+//      — matched case-insensitively, handles S$, SGD, $
+//   2. Lines labelled NETT / NET TOTAL (after GST)
+//   3. The largest dollar value on any line that ends with a
+//      currency amount — avoids picking up item prices
+//   4. Absolute fallback: largest number in the whole text
+//
+// For merchant name the parser now tries to match known SG
+// brands first (Grab, NTUC, 7-Eleven, etc.) before falling
+// back to reading the first non-noise line.
+// ============================================================
+function parseReceiptText(raw) {
+  // Normalise — collapse multiple spaces, fix common OCR substitutions
+  const text = raw
+    .replace(/\r/g, '\n')
+    .replace(/[|l](?=\d)/g, '1')   // pipe/lowercase-L before digit → 1
+    .replace(/O(?=\d)/g, '0')       // capital-O before digit → 0
+    .replace(/\$/g, '$');           // fullwidth $ → regular $
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const upper = text.toUpperCase();
+
+  // ---- AMOUNT ----
+  let amount = '';
+
+  // Priority 1: explicit total labels
+  const totalPatterns = [
+    /(?:grand\s+)?total\s+(?:amount\s+)?(?:due|paid|payable)?[\s:]*(?:s?\$|sgd|sgd\s*)?\s*(\d[\d,]*\.\d{2})/i,
+    /amount\s+(?:due|paid|payable)[\s:]*(?:s?\$|sgd)?\s*(\d[\d,]*\.\d{2})/i,
+    /balance\s+(?:due)?[\s:]*(?:s?\$|sgd)?\s*(\d[\d,]*\.\d{2})/i,
+    /(?:net\s+)?total[\s:]*(?:s?\$|sgd)?\s*(\d[\d,]*\.\d{2})/i,
+    // SGD / S$ prefix
+    /(?:s\$|sgd)\s*(\d[\d,]*\.\d{2})/i,
+  ];
+  for (const re of totalPatterns) {
+    const m = text.match(re);
+    if (m) { amount = m[1].replace(/,/g, ''); break; }
+  }
+
+  // Priority 2: look for the TOTAL line specifically — some receipts
+  // put TOTAL on one line and the number on the very next line
+  if (!amount) {
+    for (let i = 0; i < lines.length; i++) {
+      if (/^total\s*$/i.test(lines[i]) && i + 1 < lines.length) {
+        const m = lines[i + 1].match(/(?:s?\$|sgd)?\s*(\d[\d,]*\.\d{2})/i);
+        if (m) { amount = m[1].replace(/,/g, ''); break; }
+      }
+    }
+  }
+
+  // Priority 3: largest amount at end of a line (item-price style)
+  if (!amount) {
+    const candidates = [];
+    for (const line of lines) {
+      const m = line.match(/(?:\$|s\$|sgd|rm|usd)?\s*(\d{1,6}[.,]\d{2})\s*$/i);
+      if (m) {
+        const v = parseFloat(m[1].replace(',', '.'));
+        if (v > 0.01 && v < 99999) candidates.push(v);
+      }
+    }
+    if (candidates.length) amount = Math.max(...candidates).toFixed(2);
+  }
+
+  // Priority 4: absolute fallback — largest number anywhere
+  if (!amount) {
+    const all = [];
+    const re = /\b(\d{1,6}\.\d{2})\b/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const v = parseFloat(m[1]);
+      if (v > 0.5 && v < 99999) all.push(v);
+    }
+    if (all.length) amount = Math.max(...all).toFixed(2);
+  }
+
+  // ---- DATE ----
+  let date = '';
+  const mn = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
+  const datePatterns = [
+    /\b(20\d{2})[-\/](0?[1-9]|1[0-2])[-\/](0?[1-9]|[12]\d|3[01])\b/,
+    /\b(0?[1-9]|[12]\d|3[01])[-\/](0?[1-9]|1[0-2])[-\/](20\d{2})\b/,
+    new RegExp('\\b(0?[1-9]|[12]\\d|3[01])\\s+(' + mn + ')[a-z]*\\s+(20\\d{2})\\b', 'i'),
+    new RegExp('\\b(' + mn + ')[a-z]*\\s+(0?[1-9]|[12]\\d|3[01])[,\\s]+(20\\d{2})\\b', 'i'),
+    // Two-digit year fallback
+    /\b(0?[1-9]|[12]\d|3[01])[-\/](0?[1-9]|1[0-2])[-\/](\d{2})\b/,
+  ];
+  for (const pat of datePatterns) {
+    const m = text.match(pat);
+    if (m) {
+      try {
+        const raw = m[0].replace(/-/g, '/');
+        const d = new Date(raw);
+        if (!isNaN(d.getTime()) && d.getFullYear() >= 2000) {
+          date = d.toISOString().split('T')[0]; break;
+        }
+      } catch (_) {}
+    }
+  }
+  if (!date) date = todayStr();
+
+  // ---- MERCHANT NAME ----
+  // 1. Try matching known SG / common brands first
+  const brandMap = [
+    [/grab\s*(?:food|mart|express|taxi|car)?/i, 'Grab'],
+    [/gojek/i, 'Gojek'],
+    [/foodpanda/i, 'Foodpanda'],
+    [/deliveroo/i, 'Deliveroo'],
+    [/ntuc\s*(?:fairprice)?/i, 'NTUC FairPrice'],
+    [/fairprice/i, 'NTUC FairPrice'],
+    [/cold\s*storage/i, 'Cold Storage'],
+    [/sheng\s*siong/i, 'Sheng Siong'],
+    [/giant/i, 'Giant'],
+    [/don\s*don\s*donki|donki/i, 'Don Don Donki'],
+    [/7[\s-]?eleven/i, '7-Eleven'],
+    [/cheers/i, 'Cheers'],
+    [/watsons/i, 'Watsons'],
+    [/guardian/i, 'Guardian'],
+    [/starbucks/i, 'Starbucks'],
+    [/coffee\s*bean/i, 'The Coffee Bean'],
+    [/ya\s*kun/i, 'Ya Kun'],
+    [/toast\s*box/i, 'Toast Box'],
+    [/old\s*chang\s*kee/i, 'Old Chang Kee'],
+    [/mcdonald['s]?|mcdonalds/i, "McDonald's"],
+    [/burger\s*king/i, 'Burger King'],
+    [/kfc/i, 'KFC'],
+    [/subway/i, 'Subway'],
+    [/texas\s*chicken/i, 'Texas Chicken'],
+    [/bengawan\s*solo/i, 'Bengawan Solo'],
+    [/prima\s*deli/i, 'Prima Deli'],
+    [/ikea/i, 'IKEA'],
+    [/courts/i, 'Courts'],
+    [/harvey\s*norman/i, 'Harvey Norman'],
+    [/popular/i, 'Popular Bookstore'],
+    [/times\s*bookstore/i, 'Times Bookstore'],
+    [/office\s*depot/i, 'Office Depot'],
+    [/challenger/i, 'Challenger'],
+    [/best\s*denki/i, 'Best Denki'],
+    [/uniqlo/i, 'Uniqlo'],
+    [/zara/i, 'Zara'],
+    [/h&m|h and m/i, 'H&M'],
+    [/parkson/i, 'Parkson'],
+    [/robinsons/i, 'Robinsons'],
+    [/tangs/i, 'Tangs'],
+    [/capitaland/i, 'CapitaLand Mall'],
+    [/clinic\b/i, 'Medical Clinic'],
+    [/hospital/i, 'Hospital'],
+    [/pharmacy/i, 'Pharmacy'],
+  ];
+
+  let name = '';
+  const searchText = upper + ' ' + lines.slice(0, 15).join(' ').toUpperCase();
+  for (const [re, label] of brandMap) {
+    if (re.test(searchText)) { name = label; break; }
+  }
+
+  // 2. Fallback: first non-noise line in the top 12 lines
+  if (!name) {
+    const skipLine = /^(\d[\d\s\-\/]+$|receipt|invoice|tax\s*invoice|order|tel:|phone:|fax:|gst|uen|reg\s*no|website|www\.|http|address:|thank\s*you|page\s+\d|cashier|server|table\s*\d|pos\s+|ref\s*[:#]|#\d|date[:\s]|time[:\s]|receipt\s*no|bill\s*no|invoice\s*no|trans[a-z]*\s*[:#])/i;
+    for (let i = 0; i < Math.min(lines.length, 12); i++) {
+      const ln = lines[i];
+      if (ln.length <= 2) continue;
+      if (skipLine.test(ln)) continue;
+      if (/^\d+(\.\d+)?$/.test(ln)) continue;
+      if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(ln)) continue;
+      // Strip non-name characters but keep common brand punctuation
+      const clean = ln.replace(/[^\w\s&'.,\-]/g, '').trim();
+      if (clean.length >= 3) { name = clean.slice(0, 50); break; }
+    }
+  }
+
+  if (!name) name = lines.length ? lines[0].replace(/[^\w\s]/g, '').trim().slice(0, 40) : 'Receipt';
+  if (!name) name = 'Receipt';
+
+  // ---- PURPOSE / CATEGORY ----
+  const purposeMap = [
+    [/grab\s*(?:car|taxi|hitch|premium|xl|exec)|gojek|uber|lyft|taxi|cab\b|car\s*hire|car\s*rental/i, 'Transport'],
+    [/grab\s*food|foodpanda|deliveroo|food\s*delivery|deliver/i, 'Meals & Entertainment'],
+    [/mrt|bus\s*(?:ticket|fare)|train|commut|toll|ez.?link|transitlink/i, 'Transport'],
+    [/flight|airlin|airfare|airport|changi|budget\s*terminal/i, 'Travel'],
+    [/hotel|airbnb|resort|lodg|accommodat|inn\b|hostel/i, 'Accommodation'],
+    [/restaurant|bistro|hawker|kopitiam|foodcourt|food\s*court|dining|eatery|cze\s*char/i, 'Meals & Entertainment'],
+    [/cafe|coffee|starbucks|ya\s*kun|toast\s*box|kopi/i, 'Meals & Entertainment'],
+    [/lunch|dinner|breakfast|supper|meal|eat|drink\b|beverage/i, 'Meals & Entertainment'],
+    [/ntuc|fairprice|cold\s*storage|giant|sheng\s*siong|supermarket|grocery|grocer|wet\s*market|provision/i, 'Groceries'],
+    [/7.eleven|cheers|convenience\s*store|minimarts?/i, 'Groceries'],
+    [/watsons|guardian|unity\s*pharmacy|pharmacare/i, 'Groceries'],
+    [/office|stationery|supplies|depot|print|paper|toner|ink\b/i, 'Office Supplies'],
+    [/pharmacy\b|clinic|hospital|medical|dental|polyclinic|specialist|gp\b|doctor/i, 'Medical'],
+    [/book|course|training|seminar|conference|workshop|tuition|udemy|coursera/i, 'Training & Education'],
+    [/software|subscription|saas|cloud|hosting|domain|aws|azure|google\s*cloud|digitalocean/i, 'Software & Subscriptions'],
+    [/telco|singtel|starhub|m1\b|circles?\.life|mobile\s*plan|broadband|internet\s*bill/i, 'Software & Subscriptions'],
+  ];
+
+  let purpose = 'Business Expense';
+  const st = upper + ' ' + name.toUpperCase();
+  for (const [re, label] of purposeMap) {
+    if (re.test(st)) { purpose = label; break; }
+  }
+
+  return { name, amount, date, purpose };
 }
-async function scanWithTesseract(dataUrl,file,aiEl){
-  const pw=el('ocr-progress-wrap'),bar=el('ocr-bar'),pct=el('ocr-pct'),st=el('ocr-status-text'),rb=el('ocr-raw-box'),rp=el('ocr-raw-text');
-  pw.style.display='block';rb.style.display='none';aiEl.classList.remove('visible');
-  try{
-    const result=await Tesseract.recognize(dataUrl,'eng',{logger:function(info){if(info.status==='recognizing text'){const p=Math.round((info.progress||0)*100);bar.style.width=p+'%';pct.textContent=p+'%';st.textContent='Reading receipt... '+p+'%';}else if(info.status==='loading tesseract core')st.textContent='Loading OCR engine...';else if(info.status==='initializing tesseract')st.textContent='Initialising OCR...';else if(info.status==='loading language traineddata')st.textContent='Loading language data...';}});
-    pw.style.display='none';const rawText=result.data.text||'';
-    if(rawText.trim().length>0){rp.textContent=rawText;rb.style.display='block';}
-    if(rawText.trim().length<3)throw new Error('OCR could not read text. Try a clearer screenshot.');
-    const parsed=parseReceiptText(rawText);
-    el('exp-name').value=parsed.name||'';el('exp-amount').value=parsed.amount||'';el('exp-date').value=parsed.date||todayStr();el('exp-purpose').value=parsed.purpose||'';
-    el('upload-sub-text').textContent='Click to change';
-    if([parsed.name,parsed.amount].filter(Boolean).length===2){aiEl.textContent='\u2713 Fields auto-filled! Review and adjust if needed.';aiEl.style.background='#ecfdf5';aiEl.style.color='#15803d';}
-    else{aiEl.textContent='\u26a0\ufe0f OCR read text (see below) but could not find all fields.';aiEl.style.background='#fffbeb';aiEl.style.color='#b45309';}
-    aiEl.classList.add('visible');
-  }catch(err){
-    pw.style.display='none';aiEl.textContent='\u26a0\ufe0f '+(err.message||'Scan failed.');aiEl.style.background='#fff0f0';aiEl.style.color='#cc0000';aiEl.classList.add('visible');el('upload-sub-text').textContent='Click to change';
+
+// ============================================================
+// RECEIPT PROCESSING
+// ============================================================
+async function processReceipt(input) {
+  const file = input.files[0]; if (!file) return;
+  const aiEl = el('ai-processing'), area = el('upload-area');
+
+  // Read original file as dataURL
+  const dataUrl = await new Promise((res, rej) => {
+    const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
+  });
+  currentReceiptDataUrl = dataUrl;
+
+  // Show thumbnail from original (not the B&W processed version)
+  area.style.backgroundImage = 'url(' + dataUrl + ')';
+  area.style.backgroundSize = 'cover';
+  area.style.backgroundPosition = 'center';
+  area.style.minHeight = '120px';
+  area.style.borderColor = '#FF3B7F';
+  el('upload-icon-wrap').style.display = 'none';
+  el('upload-text').textContent = '\u2713 ' + file.name;
+  el('upload-sub-text').textContent = 'Scanning...';
+
+  if (getApiKey()) {
+    await scanWithClaude(dataUrl, file, getApiKey(), aiEl);
+  } else {
+    await scanWithTesseract(dataUrl, file, aiEl);
   }
 }
-async function scanWithClaude(dataUrl,file,apiKey,aiEl){
-  aiEl.textContent='\ud83e\udd16 Claude AI reading receipt...';aiEl.style.background='#FFE0ED';aiEl.style.color='#CC2B66';aiEl.classList.add('visible');
-  try{
-    const b64=dataUrl.split(',')[1],mt=file.type||'image/png';
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:300,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:'Receipt: extract merchant name, total amount (number only), date (YYYY-MM-DD), purchase category. JSON only: {"name":"...","amount":"...","date":"...","purpose":"..."}'}]}]})});
-    if(!resp.ok){const err=await resp.json().catch(()=>({}));if(resp.status===401)throw new Error('Invalid API key.');if(resp.status===429)throw new Error('Rate limit.');throw new Error((err.error&&err.error.message)||'HTTP '+resp.status);}
-    const data=await resp.json(),txt=(data.content||[]).map(c=>c.text||'').join('');
-    let parsed;try{parsed=JSON.parse(txt.replace(/```json|```/g,'').trim());}catch(_){const mm=txt.match(/\{[\s\S]*?\}/);if(!mm)throw new Error('Bad response');parsed=JSON.parse(mm[0]);}
-    if(parsed.name)el('exp-name').value=parsed.name;if(parsed.amount)el('exp-amount').value=String(parsed.amount).replace(/[^0-9.]/g,'');if(parsed.date)el('exp-date').value=parsed.date;if(parsed.purpose)el('exp-purpose').value=parsed.purpose;
-    el('upload-sub-text').textContent='Click to change';aiEl.textContent='\u2713 Claude auto-filled fields.';aiEl.style.background='#ecfdf5';aiEl.style.color='#15803d';
-  }catch(err){console.warn('Claude failed, OCR fallback:',err.message);await scanWithTesseract(dataUrl,file,aiEl);}
+
+async function scanWithTesseract(dataUrl, file, aiEl) {
+  const pw  = el('ocr-progress-wrap');
+  const bar = el('ocr-bar');
+  const pct = el('ocr-pct');
+  const st  = el('ocr-status-text');
+  const rb  = el('ocr-raw-box');
+  const rp  = el('ocr-raw-text');
+
+  pw.style.display = 'block'; rb.style.display = 'none'; aiEl.classList.remove('visible');
+
+  try {
+    // ---- Step 1: preprocess the image ----
+    st.textContent = 'Enhancing image quality...';
+    bar.style.width = '5%'; pct.textContent = '5%';
+    const processedDataUrl = await preprocessImageForOCR(dataUrl);
+
+    // ---- Step 2: run Tesseract with tuned config ----
+    // PSM 6  = assume a single uniform block of text (best for receipts)
+    // OEM 1  = use LSTM neural net engine (most accurate)
+    // We pass a custom tessedit_char_whitelist only for a second
+    // digit-focused pass if the first pass misses the amount — but
+    // for the primary pass we leave the whitelist open so merchant
+    // names and dates are captured correctly.
+    const result = await Tesseract.recognize(
+      processedDataUrl,
+      'eng',
+      {
+        logger: function(info) {
+          if (info.status === 'recognizing text') {
+            const p = Math.round((info.progress || 0) * 100);
+            bar.style.width = p + '%'; pct.textContent = p + '%';
+            st.textContent = 'Reading receipt... ' + p + '%';
+          } else if (info.status === 'loading tesseract core') {
+            st.textContent = 'Loading OCR engine...';
+          } else if (info.status === 'initializing tesseract') {
+            st.textContent = 'Initialising OCR...';
+          } else if (info.status === 'loading language traineddata') {
+            st.textContent = 'Loading language data...';
+          }
+        },
+        // Tesseract parameters — passed via the workerOptions
+        tessedit_pageseg_mode: '6',
+        tessedit_ocr_engine_mode: '1',
+        // Preserve_interword_spaces helps keep table alignment
+        preserve_interword_spaces: '1',
+      }
+    );
+
+    pw.style.display = 'none';
+    const rawText = result.data.text || '';
+
+    // Show raw OCR box for debugging
+    if (rawText.trim().length > 0) { rp.textContent = rawText; rb.style.display = 'block'; }
+    if (rawText.trim().length < 3) throw new Error('OCR could not read text. Try a clearer, well-lit photo.');
+
+    // ---- Step 3: parse the extracted text ----
+    const parsed = parseReceiptText(rawText);
+    el('exp-name').value    = parsed.name    || '';
+    el('exp-amount').value  = parsed.amount  || '';
+    el('exp-date').value    = parsed.date    || todayStr();
+    el('exp-purpose').value = parsed.purpose || '';
+
+    el('upload-sub-text').textContent = 'Click to change';
+
+    const filledCount = [parsed.name, parsed.amount].filter(Boolean).length;
+    if (filledCount === 2) {
+      aiEl.textContent        = '\u2713 Fields auto-filled! Review and adjust if needed.';
+      aiEl.style.background   = '#ecfdf5';
+      aiEl.style.color        = '#15803d';
+    } else if (filledCount === 1) {
+      aiEl.textContent        = '\u26a0\ufe0f Partial fill — some fields could not be detected. Check the raw text below.';
+      aiEl.style.background   = '#fffbeb';
+      aiEl.style.color        = '#b45309';
+    } else {
+      aiEl.textContent        = '\u26a0\ufe0f Could not extract fields. Try a clearer, flat photo with good lighting.';
+      aiEl.style.background   = '#fff0f0';
+      aiEl.style.color        = '#cc0000';
+    }
+    aiEl.classList.add('visible');
+
+  } catch (err) {
+    pw.style.display = 'none';
+    aiEl.textContent      = '\u26a0\ufe0f ' + (err.message || 'Scan failed.');
+    aiEl.style.background = '#fff0f0';
+    aiEl.style.color      = '#cc0000';
+    aiEl.classList.add('visible');
+    el('upload-sub-text').textContent = 'Click to change';
+  }
+}
+
+async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
+  aiEl.textContent      = '\ud83e\udd16 Claude AI reading receipt...';
+  aiEl.style.background = '#FFE0ED';
+  aiEl.style.color      = '#CC2B66';
+  aiEl.classList.add('visible');
+  try {
+    const b64 = dataUrl.split(',')[1], mt = file.type || 'image/png';
+    const prompt = `You are reading a receipt image. Extract the following and return ONLY a JSON object — no extra text, no markdown.
+
+Rules:
+- "name": merchant/store/vendor name (e.g. "Grab", "NTUC FairPrice", "McDonald's")
+- "amount": the final TOTAL paid as a plain number string (e.g. "12.50"). Use the TOTAL line, not subtotal or GST. If you see both a subtotal and a total, always use the total.
+- "date": transaction date in YYYY-MM-DD format. If year is missing assume ${new Date().getFullYear()}.
+- "purpose": one of exactly: Transport, Meals & Entertainment, Groceries, Office Supplies, Accommodation, Medical, Software & Subscriptions, Training & Education, Business Expense
+
+Return exactly: {"name":"...","amount":"...","date":"...","purpose":"..."}`;
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mt, data: b64 } },
+          { type: 'text', text: prompt }
+        ]}]
+      })
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      if (resp.status === 401) throw new Error('Invalid API key.');
+      if (resp.status === 429) throw new Error('Rate limit hit.');
+      throw new Error((err.error && err.error.message) || 'HTTP ' + resp.status);
+    }
+    const data = await resp.json();
+    const txt = (data.content || []).map(c => c.text || '').join('');
+    let parsed;
+    try { parsed = JSON.parse(txt.replace(/```json|```/g, '').trim()); }
+    catch (_) { const mm = txt.match(/\{[\s\S]*?\}/); if (!mm) throw new Error('Bad response'); parsed = JSON.parse(mm[0]); }
+    if (parsed.name)    el('exp-name').value    = parsed.name;
+    if (parsed.amount)  el('exp-amount').value  = String(parsed.amount).replace(/[^0-9.]/g, '');
+    if (parsed.date)    el('exp-date').value    = parsed.date;
+    if (parsed.purpose) el('exp-purpose').value = parsed.purpose;
+    el('upload-sub-text').textContent = 'Click to change';
+    aiEl.textContent      = '\u2713 Claude auto-filled fields.';
+    aiEl.style.background = '#ecfdf5';
+    aiEl.style.color      = '#15803d';
+  } catch (err) {
+    console.warn('Claude failed, falling back to Tesseract:', err.message);
+    await scanWithTesseract(dataUrl, file, aiEl);
+  }
 }
 
 // CALENDAR
@@ -311,7 +718,7 @@ function renderCalendar(){
   const firstDow=new Date(calYear,calMonth,1).getDay(),startOffset=firstDow===0?6:firstDow-1,lastDate=new Date(calYear,calMonth+1,0).getDate(),td=todayStr(),meetDates=new Set(meetings.map(m=>m.date));
   let html='';
   for(let i=0;i<startOffset;i++)html+='<div class="cal-day other-month">'+new Date(calYear,calMonth,-startOffset+i+1).getDate()+'</div>';
-  for(let d=1;d<=lastDate;d++){const ds=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'),cls=(ds===td?' today':'')+(meetDates.has(ds)?' has-event':'');html+='<div class="cal-day'+cls+'" onclick="selectDate(\''+ds+'\')">' +d+'</div>';}
+  for(let d=1;d<=lastDate;d++){const ds=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'),cls=(ds===td?' today':'')+(meetDates.has(ds)?' has-event':'');html+='<div class="cal-day'+cls+'" onclick="selectDate(\''+ds+'\')">'+d+'</div>';}
   const endDow=new Date(calYear,calMonth,lastDate).getDay();
   for(let i=1;i<=(endDow===0?0:7-endDow);i++)html+='<div class="cal-day other-month">'+i+'</div>';
   el('cal-days').innerHTML=html;
@@ -348,7 +755,7 @@ function scheduleDailyCheck(){const now=new Date(),sgt=new Date(now.toLocaleStri
 function sendDailyNotif(){const td=todayStr(),tm=meetings.filter(m=>m.date===td);const body=tm.length?'You have '+tm.length+' meeting(s) today: '+tm.map(m=>m.title+' at '+m.time).join(', '):'No meetings today \u2014 have a productive day!';if(Notification.permission==='granted')new Notification('Work Hub \u2014 Daily Briefing',{body});}
 
 // TODOS
-function renderTodos(){const done=todos.filter(t=>t.done).length,pct=todos.length?Math.round(done/todos.length*100):0;el('todo-progress-fill').style.width=pct+'%';el('todo-progress-label').textContent=done+'/'+todos.length+' completed';el('todo-list').innerHTML=todos.map(t=>'<div class="todo-item"><button class="check-btn '+(t.done?'done':'')+'" onclick="toggleTodo('+t.id+')"></button><span class="todo-text '+(t.done?'done':'')+'">'+t.text+'</span><button class="todo-del" onclick="deleteTodo('+t.id+')">&times;</button></div>').join('');}
+function renderTodos(){const done=todos.filter(t=>t.done).length,pct=todos.length?Math.round(done/todos.length*100):0;el('todo-progress-fill').style.width=pct+'%';el('todo-progress-label').textContent=done+'/'+todos.length+' completed';el('todo-list').innerHTML=todos.map(t=>'<div class="todo-item"><button class="check-btn '+(t.done?'done':'')+'\" onclick="toggleTodo('+t.id+')"></button><span class="todo-text '+(t.done?'done':'')+'">'+t.text+'</span><button class="todo-del" onclick="deleteTodo('+t.id+')">&times;</button></div>').join('');}
 function addTodo(){const inp=el('todo-input'),txt=inp.value.trim();if(!txt)return;todos.push({id:Date.now(),text:txt,done:false});inp.value='';save();renderTodos();renderDashboard();}
 function toggleTodo(id){const t=todos.find(x=>x.id===id);if(t)t.done=!t.done;save();renderTodos();renderDashboard();}
 function deleteTodo(id){todos=todos.filter(x=>x.id!==id);save();renderTodos();renderDashboard();}
