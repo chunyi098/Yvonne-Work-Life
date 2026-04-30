@@ -235,29 +235,31 @@ function saveExpense(){const name=el('exp-name').value.trim(),amount=el('exp-amo
 
 // ============================================================
 // IMAGE PREPROCESSING
-// Converts the uploaded image to a high-contrast grayscale
-// version before handing it to Tesseract. This is the single
-// biggest accuracy improvement: Tesseract reads black text on
-// a white background far better than a colour photo of a receipt.
 //
-// Steps applied:
-//   1. Upscale small images to at least 1200px on the long edge
-//      (Tesseract accuracy drops significantly below ~150 dpi)
-//   2. Convert to greyscale via luminance formula
-//   3. Apply an unsharp-mask style contrast boost:
-//      - Stretch the histogram so the darkest 10% become black
-//        and the lightest 10% become white
-//   4. Binarise with an adaptive threshold: each pixel is
-//      compared to the mean of its local neighbourhood.
-//      This handles uneven lighting (shadows, phone torch glare)
-//      much better than a fixed threshold.
+// Detects whether the image has a dark or light background and
+// applies the appropriate pipeline:
+//
+// LIGHT background (paper receipts, web order confirmations):
+//   1. Upscale to min 1400px long edge
+//   2. Greyscale via luminance
+//   3. Histogram stretch (5th–95th percentile)
+//   4. Adaptive binarisation with local block mean
+//
+// DARK background (Wise, banking apps, dark-mode screenshots):
+//   1. Upscale to min 1400px long edge
+//   2. Greyscale via luminance
+//   3. INVERT — turns white-on-dark into black-on-white
+//   4. Histogram stretch
+//   5. Adaptive binarisation
+//
+// Background detection: sample the corners + edges of the image.
+// If median pixel brightness < 100, it's a dark-background image.
 // ============================================================
 async function preprocessImageForOCR(dataUrl) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      // Step 1: upscale if too small
-      const MIN_LONG_EDGE = 1400;
+      const MIN_LONG_EDGE = 1500;
       let w = img.naturalWidth, h = img.naturalHeight;
       const longEdge = Math.max(w, h);
       if (longEdge < MIN_LONG_EDGE) {
@@ -269,34 +271,52 @@ async function preprocessImageForOCR(dataUrl) {
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
-
-      // Draw original image at (possibly upscaled) size
       ctx.drawImage(img, 0, 0, w, h);
 
       const imageData = ctx.getImageData(0, 0, w, h);
       const data = imageData.data;
       const gray = new Uint8ClampedArray(w * h);
 
-      // Step 2: greyscale via luminance
+      // Greyscale
       for (let i = 0; i < w * h; i++) {
         const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
         gray[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
       }
 
-      // Step 3: histogram stretch — find 5th and 95th percentile
+      // ---- Detect background brightness ----
+      // Sample ~400 pixels from border regions (top/bottom rows, left/right cols)
+      const borderSamples = [];
+      const step = Math.max(1, Math.floor(w / 40));
+      for (let x = 0; x < w; x += step) {
+        borderSamples.push(gray[x]);                    // top row
+        borderSamples.push(gray[(h - 1) * w + x]);     // bottom row
+      }
+      const vstep = Math.max(1, Math.floor(h / 40));
+      for (let y = 0; y < h; y += vstep) {
+        borderSamples.push(gray[y * w]);                // left col
+        borderSamples.push(gray[y * w + w - 1]);        // right col
+      }
+      borderSamples.sort((a, b) => a - b);
+      const medianBrightness = borderSamples[Math.floor(borderSamples.length / 2)];
+      const isDarkBackground = medianBrightness < 100;
+
+      // ---- Invert if dark background (white text on dark bg → black text on white) ----
+      if (isDarkBackground) {
+        for (let i = 0; i < gray.length; i++) gray[i] = 255 - gray[i];
+      }
+
+      // ---- Histogram stretch: 5th–95th percentile ----
       const sorted = gray.slice().sort((a, b) => a - b);
       const lo = sorted[Math.floor(sorted.length * 0.05)];
       const hi = sorted[Math.floor(sorted.length * 0.95)];
       const range = hi - lo || 1;
       for (let i = 0; i < gray.length; i++) {
-        gray[i] = Math.round(((gray[i] - lo) / range) * 255);
-        if (gray[i] < 0) gray[i] = 0;
-        if (gray[i] > 255) gray[i] = 255;
+        gray[i] = Math.min(255, Math.max(0, Math.round(((gray[i] - lo) / range) * 255)));
       }
 
-      // Step 4: adaptive binarisation — 16x16 block mean
-      const BLOCK = 16;
-      const BIAS  = 10; // lower = more aggressive binarisation
+      // ---- Adaptive binarisation (local block mean) ----
+      const BLOCK = 18;
+      const BIAS  = isDarkBackground ? 8 : 10;
       const out   = new Uint8ClampedArray(w * h);
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
@@ -304,16 +324,13 @@ async function preprocessImageForOCR(dataUrl) {
           const y0 = Math.max(0, y - BLOCK), y1 = Math.min(h - 1, y + BLOCK);
           let sum = 0, count = 0;
           for (let yy = y0; yy <= y1; yy++) {
-            for (let xx = x0; xx <= x1; xx++) {
-              sum += gray[yy * w + xx]; count++;
-            }
+            for (let xx = x0; xx <= x1; xx++) { sum += gray[yy * w + xx]; count++; }
           }
-          const mean = sum / count;
-          out[y * w + x] = gray[y * w + x] < mean - BIAS ? 0 : 255;
+          out[y * w + x] = gray[y * w + x] < (sum / count) - BIAS ? 0 : 255;
         }
       }
 
-      // Write binarised greyscale back to canvas RGBA
+      // Write back to canvas
       for (let i = 0; i < w * h; i++) {
         const v = out[i];
         data[i * 4] = v; data[i * 4 + 1] = v; data[i * 4 + 2] = v; data[i * 4 + 3] = 255;
@@ -321,69 +338,137 @@ async function preprocessImageForOCR(dataUrl) {
       ctx.putImageData(imageData, 0, 0);
       resolve(canvas.toDataURL('image/png'));
     };
-    img.onerror = () => resolve(dataUrl); // fallback: use original if load fails
+    img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
   });
 }
 
 // ============================================================
-// RECEIPT TEXT PARSER (improved)
-// Priority order for amount:
-//   1. Lines explicitly labelled TOTAL / AMOUNT DUE / GRAND TOTAL
-//      — matched case-insensitively, handles S$, SGD, $
-//   2. Lines labelled NETT / NET TOTAL (after GST)
-//   3. The largest dollar value on any line that ends with a
-//      currency amount — avoids picking up item prices
-//   4. Absolute fallback: largest number in the whole text
+// RECEIPT TEXT PARSER
 //
-// For merchant name the parser now tries to match known SG
-// brands first (Grab, NTUC, 7-Eleven, etc.) before falling
-// back to reading the first non-noise line.
+// Handles three distinct receipt types seen in real use:
+//
+// Type A — Paper/thermal receipts (hawker, restaurants, shops)
+//   Standard: merchant name at top, itemised list, TOTAL at bottom
+//
+// Type B — Banking/fintech app screenshots (Wise, DBS, OCBC, Grab)
+//   Layout: merchant name + large amount prominently shown
+//   Often includes FX rate (MYR → SGD), transaction ID, date
+//   Amount shown is usually in foreign currency; SGD equivalent
+//   is derived from the FX rate line
+//
+// Type C — Web order confirmations (Shopify, Lazada, Shopee)
+//   Has "Total" with currency prefix "SGD $184.52" or "S$ 184.52"
+//   Merchant name may be a brand/logo above the order number
+//   Date shown as "Confirmed 11 Apr" or "Order placed on..."
+//
+// Amount priority:
+//   1. SGD total explicitly shown (SGD $xxx, S$ xxx, Total SGD xxx)
+//   2. "Total" label on its own line followed by amount
+//   3. FX conversion: foreign amount × FX rate (for banking apps)
+//   4. Largest line-ending currency amount
+//   5. Absolute fallback: largest number anywhere
 // ============================================================
 function parseReceiptText(raw) {
-  // Normalise — collapse multiple spaces, fix common OCR substitutions
+  // Normalise — fix common OCR substitutions
   const text = raw
     .replace(/\r/g, '\n')
-    .replace(/[|l](?=\d)/g, '1')   // pipe/lowercase-L before digit → 1
-    .replace(/O(?=\d)/g, '0')       // capital-O before digit → 0
-    .replace(/\$/g, '$');           // fullwidth $ → regular $
+    .replace(/[|l](?=\d)/g, '1')
+    .replace(/O(?=\d)/g, '0');
 
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const upper = text.toUpperCase();
 
   // ---- AMOUNT ----
   let amount = '';
+  let fxDetected = false;
 
-  // Priority 1: explicit total labels
-  const totalPatterns = [
-    /(?:grand\s+)?total\s+(?:amount\s+)?(?:due|paid|payable)?[\s:]*(?:s?\$|sgd|sgd\s*)?\s*(\d[\d,]*\.\d{2})/i,
-    /amount\s+(?:due|paid|payable)[\s:]*(?:s?\$|sgd)?\s*(\d[\d,]*\.\d{2})/i,
-    /balance\s+(?:due)?[\s:]*(?:s?\$|sgd)?\s*(\d[\d,]*\.\d{2})/i,
-    /(?:net\s+)?total[\s:]*(?:s?\$|sgd)?\s*(\d[\d,]*\.\d{2})/i,
-    // SGD / S$ prefix
-    /(?:s\$|sgd)\s*(\d[\d,]*\.\d{2})/i,
+  // Priority 1a: "SGD $184.52" or "SGD$184.52" or "Total SGD $184.52"
+  // This covers Shopify/web order receipts and Wise SGD totals
+  const sgdExplicit = [
+    /total\s+sgd\s*\$?\s*([\d,]+\.\d{2})/i,
+    /sgd\s*\$\s*([\d,]+\.\d{2})/i,
+    /s\$\s*([\d,]+\.\d{2})/i,
+    /\bsgd\s+([\d,]+\.\d{2})/i,
   ];
-  for (const re of totalPatterns) {
+  for (const re of sgdExplicit) {
     const m = text.match(re);
     if (m) { amount = m[1].replace(/,/g, ''); break; }
   }
 
-  // Priority 2: look for the TOTAL line specifically — some receipts
-  // put TOTAL on one line and the number on the very next line
+  // Priority 1b: standard total labels (paper receipts)
+  if (!amount) {
+    const totalPatterns = [
+      /(?:grand\s+)?total\s+(?:amount\s+)?(?:due|paid|payable)?[\s:]*(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i,
+      /amount\s+(?:due|paid|payable)[\s:]*(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i,
+      /balance\s+(?:due)?[\s:]*(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i,
+      /(?:net\s+)?total[\s:]*(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i,
+    ];
+    for (const re of totalPatterns) {
+      const m = text.match(re);
+      if (m) { amount = m[1].replace(/,/g, ''); break; }
+    }
+  }
+
+  // Priority 2: TOTAL on its own line, number on next line
   if (!amount) {
     for (let i = 0; i < lines.length; i++) {
       if (/^total\s*$/i.test(lines[i]) && i + 1 < lines.length) {
-        const m = lines[i + 1].match(/(?:s?\$|sgd)?\s*(\d[\d,]*\.\d{2})/i);
+        const m = lines[i + 1].match(/(?:s?\$|sgd)?\s*([\d,]+\.\d{2})/i);
         if (m) { amount = m[1].replace(/,/g, ''); break; }
       }
     }
   }
 
-  // Priority 3: largest amount at end of a line (item-price style)
+  // Priority 3: FX rate conversion for banking app screenshots
+  // e.g. "MYR 650.30  211.83" with "1 MYR = 0.3257 SGD"
+  // Strategy: find the FX rate, then apply it to the foreign amount
+  if (!amount) {
+    // Look for FX rate line: "1 MYR = 0.3257 SGD" or "1 USD = 1.35 SGD"
+    const fxMatch = text.match(/1\s*([A-Z]{3})\s*[=:]\s*([\d.]+)\s*SGD/i);
+    if (fxMatch) {
+      const foreignCcy = fxMatch[1].toUpperCase();
+      const fxRate = parseFloat(fxMatch[2]);
+      // Find the foreign currency amount — usually the prominent large number
+      // Look for "MYR 650.30" or just the big number on screen
+      const foreignAmtMatch = text.match(new RegExp(foreignCcy + '\\s*([\\d,]+\\.\\d{2})', 'i'));
+      if (foreignAmtMatch && fxRate > 0) {
+        const foreignAmt = parseFloat(foreignAmtMatch[1].replace(/,/g, ''));
+        amount = (foreignAmt * fxRate).toFixed(2);
+        fxDetected = true;
+      }
+    }
+  }
+
+  // Priority 3b: Banking app — if we see a large standalone number near a currency label
+  // e.g. Wise shows "211.83" in huge font with "MYR 650.30" above
+  if (!amount) {
+    // Find "MYR xxx.xx" and the SGD equivalent shown separately
+    const myrLine = text.match(/MYR\s*([\d,]+\.\d{2})/i);
+    // Also look for a standalone number that appears to be the SGD amount
+    // (often the prominent display amount in the app)
+    const standaloneNums = [];
+    const re = /\b(\d{1,6}\.\d{2})\b/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      standaloneNums.push(parseFloat(m[1]));
+    }
+    if (myrLine && standaloneNums.length) {
+      // The SGD amount should be the standalone number that is NOT the MYR amount
+      // and NOT the FX rate (which is < 10 typically)
+      const myrAmt = parseFloat(myrLine[1].replace(/,/g, ''));
+      const candidates = standaloneNums.filter(n => n !== myrAmt && n > 1 && n < myrAmt);
+      if (candidates.length) {
+        amount = Math.max(...candidates).toFixed(2);
+      }
+    }
+  }
+
+  // Priority 4: largest currency amount at end of line
   if (!amount) {
     const candidates = [];
     for (const line of lines) {
-      const m = line.match(/(?:\$|s\$|sgd|rm|usd)?\s*(\d{1,6}[.,]\d{2})\s*$/i);
+      const m = line.match(/(?:\$|s\$|sgd|rm|myr|usd)?\s*([\d,]{1,8}\.\d{2})\s*$/i);
       if (m) {
         const v = parseFloat(m[1].replace(',', '.'));
         if (v > 0.01 && v < 99999) candidates.push(v);
@@ -392,7 +477,7 @@ function parseReceiptText(raw) {
     if (candidates.length) amount = Math.max(...candidates).toFixed(2);
   }
 
-  // Priority 4: absolute fallback — largest number anywhere
+  // Priority 5: absolute fallback
   if (!amount) {
     const all = [];
     const re = /\b(\d{1,6}\.\d{2})\b/g;
@@ -408,19 +493,30 @@ function parseReceiptText(raw) {
   let date = '';
   const mn = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
   const datePatterns = [
+    // "Confirmed 11 Apr" / "Completed on Mar 13, 2026" (web orders / banking apps)
+    new RegExp('(?:confirmed|completed\\s+on|ordered?\\s+on|placed\\s+on)[\\s:]+(?:(0?[1-9]|[12]\\d|3[01])\\s+(' + mn + ')[a-z]*(?:[,\\s]+(20\\d{2}))?|(' + mn + ')[a-z]*\\s+(0?[1-9]|[12]\\d|3[01])[,\\s]+(20\\d{2}))', 'i'),
+    // "Mar 13, 2026" or "Mar 11, 2026 at 8:26 PM"
+    new RegExp('\\b(' + mn + ')[a-z]*\\s+(0?[1-9]|[12]\\d|3[01])[,\\s]+(20\\d{2})\\b', 'i'),
     /\b(20\d{2})[-\/](0?[1-9]|1[0-2])[-\/](0?[1-9]|[12]\d|3[01])\b/,
     /\b(0?[1-9]|[12]\d|3[01])[-\/](0?[1-9]|1[0-2])[-\/](20\d{2})\b/,
     new RegExp('\\b(0?[1-9]|[12]\\d|3[01])\\s+(' + mn + ')[a-z]*\\s+(20\\d{2})\\b', 'i'),
-    new RegExp('\\b(' + mn + ')[a-z]*\\s+(0?[1-9]|[12]\\d|3[01])[,\\s]+(20\\d{2})\\b', 'i'),
-    // Two-digit year fallback
+    // "11 Apr" without year (web orders often omit year)
+    new RegExp('\\b(0?[1-9]|[12]\\d|3[01])\\s+(' + mn + ')[a-z]*\\b', 'i'),
     /\b(0?[1-9]|[12]\d|3[01])[-\/](0?[1-9]|1[0-2])[-\/](\d{2})\b/,
   ];
   for (const pat of datePatterns) {
     const m = text.match(pat);
     if (m) {
       try {
-        const raw = m[0].replace(/-/g, '/');
-        const d = new Date(raw);
+        // For patterns without year, append current year
+        let str = m[0].replace(/confirmed\s+on|completed\s+on|ordered?\s+on|placed\s+on/gi, '').trim();
+        // Remove time part if present
+        str = str.replace(/\s+at\s+\d+:\d+\s*(am|pm)?/i, '');
+        str = str.replace(/-/g, '/');
+        const yr = new Date().getFullYear();
+        // If the string has no 4-digit year, append current year
+        if (!/20\d{2}/.test(str)) str = str + ' ' + yr;
+        const d = new Date(str);
         if (!isNaN(d.getTime()) && d.getFullYear() >= 2000) {
           date = d.toISOString().split('T')[0]; break;
         }
@@ -430,18 +526,23 @@ function parseReceiptText(raw) {
   if (!date) date = todayStr();
 
   // ---- MERCHANT NAME ----
-  // 1. Try matching known SG / common brands first
+  // Known brands (checked first)
   const brandMap = [
-    [/grab\s*(?:food|mart|express|taxi|car)?/i, 'Grab'],
+    [/wise\b/i, 'Wise'],
+    [/grab\s*(?:food|mart|express|taxi|car|pay)?/i, 'Grab'],
     [/gojek/i, 'Gojek'],
     [/foodpanda/i, 'Foodpanda'],
     [/deliveroo/i, 'Deliveroo'],
+    [/shopify/i, 'Shopify'],
+    [/lazada/i, 'Lazada'],
+    [/shopee/i, 'Shopee'],
+    [/waa\s*cow|waacow/i, 'Waa Cow'],
     [/ntuc\s*(?:fairprice)?/i, 'NTUC FairPrice'],
     [/fairprice/i, 'NTUC FairPrice'],
     [/cold\s*storage/i, 'Cold Storage'],
     [/sheng\s*siong/i, 'Sheng Siong'],
-    [/giant/i, 'Giant'],
     [/don\s*don\s*donki|donki/i, 'Don Don Donki'],
+    [/giant/i, 'Giant'],
     [/7[\s-]?eleven/i, '7-Eleven'],
     [/cheers/i, 'Cheers'],
     [/watsons/i, 'Watsons'],
@@ -451,6 +552,7 @@ function parseReceiptText(raw) {
     [/ya\s*kun/i, 'Ya Kun'],
     [/toast\s*box/i, 'Toast Box'],
     [/old\s*chang\s*kee/i, 'Old Chang Kee'],
+    [/hakka\s*restaurant/i, 'Hakka Restaurant'],
     [/mcdonald['s]?|mcdonalds/i, "McDonald's"],
     [/burger\s*king/i, 'Burger King'],
     [/kfc/i, 'KFC'],
@@ -462,16 +564,12 @@ function parseReceiptText(raw) {
     [/courts/i, 'Courts'],
     [/harvey\s*norman/i, 'Harvey Norman'],
     [/popular/i, 'Popular Bookstore'],
-    [/times\s*bookstore/i, 'Times Bookstore'],
     [/office\s*depot/i, 'Office Depot'],
     [/challenger/i, 'Challenger'],
     [/best\s*denki/i, 'Best Denki'],
     [/uniqlo/i, 'Uniqlo'],
     [/zara/i, 'Zara'],
     [/h&m|h and m/i, 'H&M'],
-    [/parkson/i, 'Parkson'],
-    [/robinsons/i, 'Robinsons'],
-    [/tangs/i, 'Tangs'],
     [/capitaland/i, 'CapitaLand Mall'],
     [/clinic\b/i, 'Medical Clinic'],
     [/hospital/i, 'Hospital'],
@@ -479,47 +577,60 @@ function parseReceiptText(raw) {
   ];
 
   let name = '';
-  const searchText = upper + ' ' + lines.slice(0, 15).join(' ').toUpperCase();
+  const searchText = upper + ' ' + lines.slice(0, 20).join(' ').toUpperCase();
   for (const [re, label] of brandMap) {
     if (re.test(searchText)) { name = label; break; }
   }
 
-  // 2. Fallback: first non-noise line in the top 12 lines
+  // For web orders: look for "Order #XXXXX" context and use the brand from nearby text
   if (!name) {
-    const skipLine = /^(\d[\d\s\-\/]+$|receipt|invoice|tax\s*invoice|order|tel:|phone:|fax:|gst|uen|reg\s*no|website|www\.|http|address:|thank\s*you|page\s+\d|cashier|server|table\s*\d|pos\s+|ref\s*[:#]|#\d|date[:\s]|time[:\s]|receipt\s*no|bill\s*no|invoice\s*no|trans[a-z]*\s*[:#])/i;
-    for (let i = 0; i < Math.min(lines.length, 12); i++) {
+    const orderMatch = text.match(/order\s*#\s*\d+/i);
+    if (orderMatch) {
+      // Look for brand name in first 5 lines (usually logo/brand name at top)
+      for (let i = 0; i < Math.min(lines.length, 5); i++) {
+        const ln = lines[i];
+        if (ln.length >= 3 && ln.length <= 40 && !/order|#|\d{4,}/.test(ln)) {
+          name = ln.replace(/[^\w\s&'.,\-]/g, '').trim();
+          if (name.length >= 2) break;
+        }
+      }
+    }
+  }
+
+  // Fallback: first clean non-noise line
+  if (!name) {
+    const skipLine = /^(\d[\d\s\-\/]+$|receipt|invoice|tax\s*invoice|order\s*#|tel:|phone:|fax:|gst|uen|reg\s*no|website|www\.|http|address:|thank\s*you|page\s+\d|cashier|server|table\s*\d|pos\s+|ref\s*[:#]|#\d|date[:\s]|time[:\s]|receipt\s*no|bill\s*no|invoice\s*no|trans[a-z]*\s*[:#]|merchant\s*name|transaction\s*id|fx\s*rate|completed)/i;
+    for (let i = 0; i < Math.min(lines.length, 15); i++) {
       const ln = lines[i];
       if (ln.length <= 2) continue;
       if (skipLine.test(ln)) continue;
       if (/^\d+(\.\d+)?$/.test(ln)) continue;
       if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(ln)) continue;
-      // Strip non-name characters but keep common brand punctuation
       const clean = ln.replace(/[^\w\s&'.,\-]/g, '').trim();
       if (clean.length >= 3) { name = clean.slice(0, 50); break; }
     }
   }
 
-  if (!name) name = lines.length ? lines[0].replace(/[^\w\s]/g, '').trim().slice(0, 40) : 'Receipt';
   if (!name) name = 'Receipt';
 
-  // ---- PURPOSE / CATEGORY ----
+  // ---- PURPOSE ----
   const purposeMap = [
     [/grab\s*(?:car|taxi|hitch|premium|xl|exec)|gojek|uber|lyft|taxi|cab\b|car\s*hire|car\s*rental/i, 'Transport'],
     [/grab\s*food|foodpanda|deliveroo|food\s*delivery|deliver/i, 'Meals & Entertainment'],
     [/mrt|bus\s*(?:ticket|fare)|train|commut|toll|ez.?link|transitlink/i, 'Transport'],
-    [/flight|airlin|airfare|airport|changi|budget\s*terminal/i, 'Travel'],
+    [/flight|airlin|airfare|airport|changi/i, 'Travel'],
     [/hotel|airbnb|resort|lodg|accommodat|inn\b|hostel/i, 'Accommodation'],
-    [/restaurant|bistro|hawker|kopitiam|foodcourt|food\s*court|dining|eatery|cze\s*char/i, 'Meals & Entertainment'],
+    [/restaurant|bistro|hawker|kopitiam|foodcourt|food\s*court|dining|eatery|dining/i, 'Meals & Entertainment'],
     [/cafe|coffee|starbucks|ya\s*kun|toast\s*box|kopi/i, 'Meals & Entertainment'],
-    [/lunch|dinner|breakfast|supper|meal|eat|drink\b|beverage/i, 'Meals & Entertainment'],
-    [/ntuc|fairprice|cold\s*storage|giant|sheng\s*siong|supermarket|grocery|grocer|wet\s*market|provision/i, 'Groceries'],
-    [/7.eleven|cheers|convenience\s*store|minimarts?/i, 'Groceries'],
-    [/watsons|guardian|unity\s*pharmacy|pharmacare/i, 'Groceries'],
-    [/office|stationery|supplies|depot|print|paper|toner|ink\b/i, 'Office Supplies'],
-    [/pharmacy\b|clinic|hospital|medical|dental|polyclinic|specialist|gp\b|doctor/i, 'Medical'],
-    [/book|course|training|seminar|conference|workshop|tuition|udemy|coursera/i, 'Training & Education'],
-    [/software|subscription|saas|cloud|hosting|domain|aws|azure|google\s*cloud|digitalocean/i, 'Software & Subscriptions'],
-    [/telco|singtel|starhub|m1\b|circles?\.life|mobile\s*plan|broadband|internet\s*bill/i, 'Software & Subscriptions'],
+    [/lunch|dinner|breakfast|supper|meal|eat|drink\b|beverage|wagyu|chirashi|sushi|japanese/i, 'Meals & Entertainment'],
+    [/ntuc|fairprice|cold\s*storage|giant|sheng\s*siong|supermarket|grocery|grocer/i, 'Groceries'],
+    [/7.eleven|cheers|convenience\s*store|minimart/i, 'Groceries'],
+    [/watsons|guardian|unity\s*pharmacy/i, 'Groceries'],
+    [/office|stationery|supplies|depot|print|paper/i, 'Office Supplies'],
+    [/pharmacy\b|clinic|hospital|medical|dental|polyclinic/i, 'Medical'],
+    [/book|course|training|seminar|conference|workshop|tuition/i, 'Training & Education'],
+    [/software|subscription|saas|cloud|hosting|domain|aws/i, 'Software & Subscriptions'],
+    [/singtel|starhub|m1\b|circles?\.life|mobile\s*plan|broadband/i, 'Software & Subscriptions'],
   ];
 
   let purpose = 'Business Expense';
@@ -528,7 +639,7 @@ function parseReceiptText(raw) {
     if (re.test(st)) { purpose = label; break; }
   }
 
-  return { name, amount, date, purpose };
+  return { name, amount, date, purpose, fxDetected };
 }
 
 // ============================================================
@@ -538,13 +649,11 @@ async function processReceipt(input) {
   const file = input.files[0]; if (!file) return;
   const aiEl = el('ai-processing'), area = el('upload-area');
 
-  // Read original file as dataURL
   const dataUrl = await new Promise((res, rej) => {
     const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
   });
   currentReceiptDataUrl = dataUrl;
 
-  // Show thumbnail from original (not the B&W processed version)
   area.style.backgroundImage = 'url(' + dataUrl + ')';
   area.style.backgroundSize = 'cover';
   area.style.backgroundPosition = 'center';
@@ -572,18 +681,10 @@ async function scanWithTesseract(dataUrl, file, aiEl) {
   pw.style.display = 'block'; rb.style.display = 'none'; aiEl.classList.remove('visible');
 
   try {
-    // ---- Step 1: preprocess the image ----
-    st.textContent = 'Enhancing image quality...';
+    st.textContent = 'Enhancing image...';
     bar.style.width = '5%'; pct.textContent = '5%';
     const processedDataUrl = await preprocessImageForOCR(dataUrl);
 
-    // ---- Step 2: run Tesseract with tuned config ----
-    // PSM 6  = assume a single uniform block of text (best for receipts)
-    // OEM 1  = use LSTM neural net engine (most accurate)
-    // We pass a custom tessedit_char_whitelist only for a second
-    // digit-focused pass if the first pass misses the amount — but
-    // for the primary pass we leave the whitelist open so merchant
-    // names and dates are captured correctly.
     const result = await Tesseract.recognize(
       processedDataUrl,
       'eng',
@@ -601,10 +702,8 @@ async function scanWithTesseract(dataUrl, file, aiEl) {
             st.textContent = 'Loading language data...';
           }
         },
-        // Tesseract parameters — passed via the workerOptions
         tessedit_pageseg_mode: '6',
         tessedit_ocr_engine_mode: '1',
-        // Preserve_interword_spaces helps keep table alignment
         preserve_interword_spaces: '1',
       }
     );
@@ -612,11 +711,9 @@ async function scanWithTesseract(dataUrl, file, aiEl) {
     pw.style.display = 'none';
     const rawText = result.data.text || '';
 
-    // Show raw OCR box for debugging
     if (rawText.trim().length > 0) { rp.textContent = rawText; rb.style.display = 'block'; }
-    if (rawText.trim().length < 3) throw new Error('OCR could not read text. Try a clearer, well-lit photo.');
+    if (rawText.trim().length < 3) throw new Error('OCR could not read text. Try a clearer photo.');
 
-    // ---- Step 3: parse the extracted text ----
     const parsed = parseReceiptText(rawText);
     el('exp-name').value    = parsed.name    || '';
     el('exp-amount').value  = parsed.amount  || '';
@@ -627,17 +724,18 @@ async function scanWithTesseract(dataUrl, file, aiEl) {
 
     const filledCount = [parsed.name, parsed.amount].filter(Boolean).length;
     if (filledCount === 2) {
-      aiEl.textContent        = '\u2713 Fields auto-filled! Review and adjust if needed.';
-      aiEl.style.background   = '#ecfdf5';
-      aiEl.style.color        = '#15803d';
+      const fxNote = parsed.fxDetected ? ' (converted from foreign currency — please verify)' : '';
+      aiEl.textContent      = '\u2713 Fields auto-filled!' + fxNote + ' Review and adjust if needed.';
+      aiEl.style.background = parsed.fxDetected ? '#fffbeb' : '#ecfdf5';
+      aiEl.style.color      = parsed.fxDetected ? '#b45309' : '#15803d';
     } else if (filledCount === 1) {
-      aiEl.textContent        = '\u26a0\ufe0f Partial fill — some fields could not be detected. Check the raw text below.';
-      aiEl.style.background   = '#fffbeb';
-      aiEl.style.color        = '#b45309';
+      aiEl.textContent      = '\u26a0\ufe0f Partial fill — some fields not detected. Check raw text below.';
+      aiEl.style.background = '#fffbeb';
+      aiEl.style.color      = '#b45309';
     } else {
-      aiEl.textContent        = '\u26a0\ufe0f Could not extract fields. Try a clearer, flat photo with good lighting.';
-      aiEl.style.background   = '#fff0f0';
-      aiEl.style.color        = '#cc0000';
+      aiEl.textContent      = '\u26a0\ufe0f Could not extract fields. Try a clearer, flat photo with good lighting.';
+      aiEl.style.background = '#fff0f0';
+      aiEl.style.color      = '#cc0000';
     }
     aiEl.classList.add('visible');
 
@@ -658,13 +756,16 @@ async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
   aiEl.classList.add('visible');
   try {
     const b64 = dataUrl.split(',')[1], mt = file.type || 'image/png';
-    const prompt = `You are reading a receipt image. Extract the following and return ONLY a JSON object — no extra text, no markdown.
+    const prompt = `You are reading a receipt, order confirmation, or payment screenshot. Extract the following and return ONLY a JSON object — no extra text, no markdown.
 
 Rules:
-- "name": merchant/store/vendor name (e.g. "Grab", "NTUC FairPrice", "McDonald's")
-- "amount": the final TOTAL paid as a plain number string (e.g. "12.50"). Use the TOTAL line, not subtotal or GST. If you see both a subtotal and a total, always use the total.
-- "date": transaction date in YYYY-MM-DD format. If year is missing assume ${new Date().getFullYear()}.
-- "purpose": one of exactly: Transport, Meals & Entertainment, Groceries, Office Supplies, Accommodation, Medical, Software & Subscriptions, Training & Education, Business Expense
+- "name": the merchant or store name (e.g. "Grab", "Hakka Restaurant", "Waa Cow", "NTUC FairPrice")
+- "amount": the final total in SGD as a plain number string (e.g. "184.52").
+  * If the receipt shows SGD total explicitly, use that.
+  * If it shows a foreign currency (MYR, USD, etc.) with an FX rate to SGD, calculate and return the SGD equivalent.
+  * Use the TOTAL line — never subtotal, never a line item price.
+- "date": transaction/order date in YYYY-MM-DD. If no year shown assume ${new Date().getFullYear()}.
+- "purpose": one of: Transport, Meals & Entertainment, Groceries, Office Supplies, Accommodation, Medical, Software & Subscriptions, Training & Education, Business Expense
 
 Return exactly: {"name":"...","amount":"...","date":"...","purpose":"..."}`;
 
