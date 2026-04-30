@@ -178,7 +178,8 @@ function showPage(pageId){
 
 // API KEY
 function getApiKey(){return localStorage.getItem('wh_apikey')||'';}
-function updateApiKeyStatus(){const span=el('api-key-status');if(!span)return;if(getApiKey()){span.textContent='\u2713 API Key saved';span.style.color='#15803d';}else{span.textContent='Set API Key (optional)';span.style.color='';}}
+function updateApiKeyStatus(){const span=el('api-key-status');if(!span)return;if(getApiKey()){span.textContent='\u2713 API Key saved';span.style.color='#15803d';}else{span.textContent='Set API Key (optional)';span.style.color='';}
+}
 function openApiKeyModal(){el('apikey-input').value=getApiKey();el('apikey-modal').classList.add('open');}
 function closeApiKeyModal(){el('apikey-modal').classList.remove('open');}
 function saveApiKey(){const k=el('apikey-input').value.trim();if(!k){alert('Please enter your API key.');return;}if(!k.startsWith('sk-ant-')){alert('Key should start with sk-ant-');return;}localStorage.setItem('wh_apikey',k);updateApiKeyStatus();closeApiKeyModal();alert('API key saved!');}
@@ -292,7 +293,6 @@ async function preprocessImageForOCR(dataUrl) {
 
 // ============================================================
 // OCR LINE QUALITY CHECK
-// Returns true if a line looks like garbled logo/image text.
 // ============================================================
 function isNoiseLine(line) {
   if (!line || line.length < 2) return true;
@@ -407,17 +407,12 @@ function parseReceiptText(raw) {
   if(!date) date=todayStr();
 
   // ---- MERCHANT NAME ----
-  // Strategy: search the ENTIRE text for brand fingerprints first.
-  // This handles cases where the logo is unreadable but brand name
-  // or unique menu items appear elsewhere in the document.
-  //
-  // Waa Cow specifically: their logo renders as garbage ("RRR WOON...")
-  // but their menu items (Mentaiko Wagyu Beef, Original Chirashi,
-  // Yuzu Foie Gras Wagyu Beef) are printed in plain text and are unique.
-  // We match on individual keywords — no compound regex needed.
+  // Step 1: Search full text for known brand names.
+  // This catches brand names that appear anywhere in the document,
+  // not just at the top — important for banking app screenshots where
+  // the merchant name appears in a "Merchant name" field midway down.
 
   const brandMap = [
-    // Each entry: [regex tested on full uppercased text, brand name]
     [/\bWISE\b/, 'Wise'],
     [/GRAB\s*(?:FOOD|MART|EXPRESS|TAXI|CAR|PAY)?/, 'Grab'],
     [/GOJEK/, 'Gojek'],
@@ -425,18 +420,22 @@ function parseReceiptText(raw) {
     [/DELIVEROO/, 'Deliveroo'],
     [/LAZADA/, 'Lazada'],
     [/SHOPEE/, 'Shopee'],
-    // Waa Cow: logo unreadable — match on unique menu item words instead
+    // Waa Cow: logo unreadable — match unique menu items
     [/WAA\s*COW|WAACOW/, 'Waa Cow'],
     [/MENTAIKO\s+WAGYU/, 'Waa Cow'],
     [/YUZU\s+FOIE\s+GRAS/, 'Waa Cow'],
     [/ORIGINAL\s+CHIRASHI/, 'Waa Cow'],
     [/ORIGINAL\s+WAGYU\s+BEEF/, 'Waa Cow'],
+    // Soong Kee: famous KL beef noodle restaurant
+    [/SOONG\s*KEE/, 'Soong Kee Beef Noodle'],
+    // Hakka Restaurant
+    [/HAKKA\s*RESTAURANT/, 'Hakka Restaurant'],
     // Standard SG brands
     [/NTUC\s*(?:FAIRPRICE)?/, 'NTUC FairPrice'],
     [/FAIRPRICE/, 'NTUC FairPrice'],
     [/COLD\s*STORAGE/, 'Cold Storage'],
     [/SHENG\s*SIONG/, 'Sheng Siong'],
-    [/DON\s*DON\s*DONKI|DONKI/, 'Don Don Donki'],
+    [/DON\s*DON\s*DONKI|\bDONKI\b/, 'Don Don Donki'],
     [/\bGIANT\b/, 'Giant'],
     [/7[\s-]?ELEVEN/, '7-Eleven'],
     [/\bCHEERS\b/, 'Cheers'],
@@ -447,7 +446,6 @@ function parseReceiptText(raw) {
     [/YA\s*KUN/, 'Ya Kun'],
     [/TOAST\s*BOX/, 'Toast Box'],
     [/OLD\s*CHANG\s*KEE/, 'Old Chang Kee'],
-    [/HAKKA\s*RESTAURANT/, 'Hakka Restaurant'],
     [/MCDONALD|MCDONALDS/, "McDonald's"],
     [/BURGER\s*KING/, 'Burger King'],
     [/\bKFC\b/, 'KFC'],
@@ -469,13 +467,11 @@ function parseReceiptText(raw) {
   ];
 
   let name = '';
-  // Test each brand pattern against the full uppercased text
   for (const [re, label] of brandMap) {
     if (re.test(upper)) { name = label; break; }
   }
 
-  // Shopify order fallback: if we see "Order #" + Shopify-style text
-  // but no brand matched above, try readable lines near the top
+  // Step 2: Shopify order fallback
   if (!name) {
     const isShopifyOrder = /ORDER\s*#\s*\d+/.test(upper) &&
       /PREPARING.*ITEMS.*SHIPPING|BUY\s*AGAIN|ORDER\s*DISCOUNT|MASTERCARD|VISA/.test(upper);
@@ -492,13 +488,19 @@ function parseReceiptText(raw) {
     }
   }
 
-  // General fallback: first clean, non-noise line
+  // Step 3: General fallback — first clean non-noise line.
+  // KEY FIX: skip lines that are just a currency code + amount
+  // e.g. "MYR 218.70" or "USD 45.00" — these are payment amounts,
+  // not merchant names, but they look like valid text to the noise filter.
   if (!name) {
     const skip = /^(\d[\d\s\-\/]+$|receipt|invoice|tax\s*invoice|order\s*#|tel:|phone:|fax:|gst|uen|reg\s*no|website|www\.|http|address:|thank\s*you|page\s+\d|cashier|server|table\s*\d|pos\s+|ref\s*[:#]|#\d|date[:\s]|time[:\s]|receipt\s*no|bill\s*no|invoice\s*no|trans[a-z]*\s*[:#]|merchant\s*name|transaction\s*id|fx\s*rate|completed)/i;
+    // Currency-amount line pattern: "MYR 218.70" / "USD 45.00" / "SGD 100.00"
+    const isCurrencyAmtLine = /^(MYR|SGD|USD|EUR|GBP|AUD|HKD|JPY|THB|CNY|INR|IDR|PHP|VND)\s+[\d,]+\.\d{2}\s*$/i;
     for (let i = 0; i < Math.min(lines.length, 15); i++) {
       const ln = lines[i];
       if (ln.length <= 2) continue;
       if (skip.test(ln)) continue;
+      if (isCurrencyAmtLine.test(ln)) continue;   // <-- NEW: skip "MYR 218.70" lines
       if (/^\d+(\.\d+)?$/.test(ln)) continue;
       if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(ln)) continue;
       if (isNoiseLine(ln)) continue;
@@ -516,7 +518,7 @@ function parseReceiptText(raw) {
     [/mrt|bus\s*(?:ticket|fare)|train|commut|toll|ez.?link|transitlink/i, 'Transport'],
     [/flight|airlin|airfare|airport|changi/i, 'Travel'],
     [/hotel|airbnb|resort|lodg|accommodat|inn\b|hostel/i, 'Accommodation'],
-    [/restaurant|bistro|hawker|kopitiam|foodcourt|food\s*court|dining|eatery/i, 'Meals & Entertainment'],
+    [/restaurant|bistro|hawker|kopitiam|foodcourt|food\s*court|dining|eatery|noodle/i, 'Meals & Entertainment'],
     [/cafe|coffee|starbucks|ya\s*kun|toast\s*box|kopi/i, 'Meals & Entertainment'],
     [/lunch|dinner|breakfast|supper|meal|eat|drink\b|beverage|wagyu|chirashi|sushi|japanese|mentaiko|foie\s*gras/i, 'Meals & Entertainment'],
     [/ntuc|fairprice|cold\s*storage|giant|sheng\s*siong|supermarket|grocery|grocer/i, 'Groceries'],
@@ -597,8 +599,8 @@ async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
     const prompt=`You are reading a receipt, order confirmation, or payment screenshot. Extract the following and return ONLY a JSON object — no extra text, no markdown.
 
 Rules:
-- "name": the merchant or store name (e.g. "Grab", "Hakka Restaurant", "Waa Cow", "NTUC FairPrice"). If the logo is unclear but you can see the menu items or order details, infer the brand from those.
-- "amount": the final total in SGD as a plain number string (e.g. "184.52").
+- "name": the merchant or store name (e.g. "Grab", "Hakka Restaurant", "Soong Kee Beef Noodle", "Waa Cow"). If the logo is unclear, infer the brand from menu items or merchant name fields in the document.
+- "amount": the final total in SGD as a plain number string (e.g. "71.10").
   * If the receipt shows SGD total explicitly, use that.
   * If it shows a foreign currency (MYR, USD, etc.) with an FX rate to SGD, calculate and return the SGD equivalent.
   * Use the TOTAL line — never subtotal, never a line item price.
