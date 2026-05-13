@@ -105,12 +105,9 @@
 <!-- ===== DASHBOARD (hidden until logged in) ===== -->
 <div id="app-shell">
 
-<!-- Finance confirm banner -->
 <div id="finance-confirm-banner" style="display:none;position:fixed;top:0;left:0;right:0;background:#15803d;color:white;text-align:center;padding:12px 16px;font-size:14px;font-weight:600;z-index:999"></div>
 
 <div class="app">
-
-  <!-- SIDEBAR -->
   <nav class="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-logo">
@@ -139,10 +136,7 @@
     </div>
   </nav>
 
-  <!-- MAIN -->
   <main class="main">
-
-    <!-- DASHBOARD -->
     <div id="page-dashboard" class="page active">
       <div class="dash-hero">
         <div class="hero-text"><h2 id="hero-date">Loading...</h2><p>Good morning! Here's your daily overview.</p></div>
@@ -163,7 +157,6 @@
       </div>
     </div>
 
-    <!-- EXPENSES -->
     <div id="page-expenses" class="page">
       <div class="page-header">
         <div><div class="page-title">Expense Tracker</div><div class="page-sub">Track &amp; manage company reimbursements</div></div>
@@ -190,7 +183,6 @@
       </div>
     </div>
 
-    <!-- CALENDAR -->
     <div id="page-calendar" class="page">
       <div class="page-header">
         <div><div class="page-title">Calendar</div><div class="page-sub">Manage your meetings and schedule</div></div>
@@ -222,7 +214,6 @@
       <div class="card" style="margin-top:16px"><div class="card-header"><div class="card-title">All Meetings</div></div><div id="all-meetings-list" class="meeting-list"></div></div>
     </div>
 
-    <!-- TO-DO -->
     <div id="page-todos" class="page">
       <div class="page-header"><div><div class="page-title">To-Do List</div><div class="page-sub">Keep track of your tasks</div></div></div>
       <div class="card">
@@ -232,7 +223,6 @@
       </div>
     </div>
 
-    <!-- SHEETS -->
     <div id="page-sheets" class="page">
       <div class="page-header"><div><div class="page-title">Google Sheets</div><div class="page-sub">Quick access to your spreadsheets</div></div><button class="btn-pink" onclick="openSheetModal()">+ Add Sheet</button></div>
       <div class="card">
@@ -240,26 +230,14 @@
         <div id="sheets-list" class="sheets-list"></div>
       </div>
     </div>
-
   </main>
 </div>
 
-<!-- ===== MODALS ===== -->
-
+<!-- MODALS -->
 <div id="gcal-setup-modal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="modal">
     <div class="modal-title">Connect Google Calendar</div>
-    <p style="font-size:13px;color:#555;line-height:1.6;margin-bottom:12px">
-      Paste your <strong>Google OAuth Client ID</strong> below. Once connected, meetings you add here will automatically appear in Google Calendar, and your Google Calendar events will show up here.
-    </p>
-    <div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;font-size:12px;color:#1e40af;margin-bottom:14px;line-height:1.7">
-      <strong>How to get your Client ID:</strong><br>
-      1. Go to <a href="https://console.cloud.google.com" target="_blank" style="color:#1d4ed8">console.cloud.google.com</a><br>
-      2. Create a project &rarr; Enable <strong>Google Calendar API</strong><br>
-      3. Credentials &rarr; Create <strong>OAuth 2.0 Client ID</strong> &rarr; Web application<br>
-      4. Add your site URL to <strong>Authorised JavaScript origins</strong><br>
-      5. Copy the Client ID and paste it below
-    </div>
+    <p style="font-size:13px;color:#555;line-height:1.6;margin-bottom:12px">Paste your <strong>Google OAuth Client ID</strong> below.</p>
     <div class="form-group" style="margin-bottom:12px">
       <label class="form-label">Google OAuth Client ID</label>
       <input class="form-input" id="gcal-client-id-input" placeholder="123456789-abc.apps.googleusercontent.com" />
@@ -289,7 +267,7 @@
 <div id="finance-link-modal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="modal">
     <div class="modal-title">Share with Finance Team</div>
-    <p style="font-size:13px;color:#555;line-height:1.6;margin-bottom:12px">Send this link to your finance team. They mark expenses as paid, then send you back a confirmation link that auto-updates your dashboard.</p>
+    <p style="font-size:13px;color:#555;line-height:1.6;margin-bottom:12px">Send this link to your finance team.</p>
     <div style="background:#f8f8f8;border:1px solid #eee;border-radius:8px;padding:10px 12px;font-size:11px;color:#555;word-break:break-all;margin-bottom:12px" id="finance-link-text"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="el('finance-link-modal').classList.remove('open')">Close</button>
@@ -361,23 +339,21 @@
 
 </div><!-- end app-shell -->
 
-<!-- Load order matters: Supabase → script.js → then init auth -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="script.js"></script>
 <script>
-  // _sb is created AFTER script.js loads so hydrateFromSupabase can use it
   const _sb = supabase.createClient(
     'https://zgpboecgewijpndufpkl.supabase.co',
-    'sb_publishable_G7PJdcsoMSNoYomKjzcB8A_mjO7sJ6E'
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpncGJvZWNnZXdpanBuZHVmcGtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MzgxODMsImV4cCI6MjA5NDIxNDE4M30.B-_73Gr26R8ytEgFm9Ajttra5H96KBm-WF60Zf8yohA'
   );
 
   async function initAuth() {
     const { data: { session } } = await _sb.auth.getSession();
     if (session) {
       showDashboard();
-      hydrateFromSupabase(); // ← only called when auth is confirmed
+      hydrateFromSupabase();
     } else {
       document.getElementById('login-gate').classList.add('show');
     }
@@ -398,7 +374,7 @@
       btn.textContent = 'Sign In';
     } else {
       showDashboard();
-      hydrateFromSupabase(); // ← only called after successful login
+      hydrateFromSupabase();
     }
   }
 
