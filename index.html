@@ -5,8 +5,118 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Work Hub</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    #login-gate {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0f0f0f;
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    #login-gate.show { display: flex; }
+    .login-box {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+    }
+    .login-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+    .login-logo-dot {
+      width: 36px;
+      height: 36px;
+      background: #FF3B7F;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-logo-text { font-size: 18px; font-weight: 600; color: #fff; }
+    .login-logo-sub { font-size: 12px; color: #666; margin-top: 1px; }
+    .login-heading { font-size: 22px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+    .login-sub { font-size: 13px; color: #666; margin-bottom: 28px; }
+    .login-label { font-size: 12px; color: #888; margin-bottom: 6px; display: block; }
+    .login-input {
+      width: 100%;
+      background: #111;
+      border: 1px solid #2e2e2e;
+      border-radius: 8px;
+      padding: 11px 14px;
+      font-size: 14px;
+      color: #fff;
+      margin-bottom: 16px;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .login-input:focus { border-color: #FF3B7F; }
+    .login-btn {
+      width: 100%;
+      background: #FF3B7F;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      margin-top: 4px;
+    }
+    .login-btn:hover { opacity: 0.88; }
+    .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .login-error {
+      background: #2a0f0f;
+      border: 1px solid #5a1a1a;
+      color: #ff7070;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .login-error.show { display: block; }
+    #app-shell { display: none; }
+    #app-shell.show { display: block; }
+  </style>
 </head>
 <body>
+
+<!-- ===== LOGIN GATE ===== -->
+<div id="login-gate" class="show">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-dot">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="white"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a5 5 0 110 10A5 5 0 018 3zm0 2a3 3 0 100 6 3 3 0 000-6z"/></svg>
+      </div>
+      <div>
+        <div class="login-logo-text">Work Hub</div>
+        <div class="login-logo-sub">Private Dashboard</div>
+      </div>
+    </div>
+    <div class="login-heading">Welcome back</div>
+    <div class="login-sub">Sign in to access your dashboard</div>
+    <div class="login-error" id="login-error">Incorrect email or password. Please try again.</div>
+    <label class="login-label">Email</label>
+    <input class="login-input" id="login-email" type="email" placeholder="your@email.com" />
+    <label class="login-label">Password</label>
+    <input class="login-input" id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" />
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
+<!-- ===== DASHBOARD (hidden until logged in) ===== -->
+<div id="app-shell">
 
 <!-- Finance confirm banner -->
 <div id="finance-confirm-banner" style="display:none;position:fixed;top:0;left:0;right:0;background:#15803d;color:white;text-align:center;padding:12px 16px;font-size:14px;font-weight:600;z-index:999"></div>
@@ -27,7 +137,6 @@
     <button class="nav-item" onclick="showPage('todos')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h4v1H5V9z"/></svg>To-Do</button>
     <button class="nav-item" onclick="showPage('sheets')"><svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V6L9 1zm0 1.5L13.5 7H9V2.5zM4 3h4v5h5v5H4V3z"/></svg>Sheets</button>
     <div class="sidebar-footer">
-      <!-- Google Calendar connect button -->
       <button class="gcal-btn" id="gcal-btn" onclick="gcalToggle()">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1a1 1 0 012 0v1h4V1a1 1 0 012 0v1h1a2 2 0 012 2v9a2 2 0 01-2 2H3a2 2 0 01-2-2V4a2 2 0 012-2h1V1zm-1 5v7h10V6H3z"/></svg>
         <span id="gcal-btn-text">Connect Google Calendar</span>
@@ -35,6 +144,10 @@
       <button class="apikey-btn" onclick="openApiKeyModal()">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M10 1a5 5 0 013.54 8.54L14 10h1v2h-1v2h-2v-1h-1v-1h-1l-1.46-1.46A5 5 0 1110 1zm0 2a3 3 0 100 6 3 3 0 000-6zm0 1.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3z"/></svg>
         <span id="api-key-status">Set API Key (optional)</span>
+      </button>
+      <button onclick="doLogout()" style="width:100%;margin-top:8px;padding:8px;background:none;border:1px solid #2e2e2e;border-radius:8px;color:#888;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3v-1H3V3h3V2zm5.78 5.5l-2.64-2.64-.71.71L10.36 7.5H5v1h5.36l-1.93 1.93.71.71L12.78 8.5l-.5-.5.5-.5z"/></svg>
+        Sign Out
       </button>
     </div>
   </nav>
@@ -265,9 +378,62 @@
   </div>
 </div>
 
+</div><!-- end app-shell -->
+
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const _sb = supabase.createClient(
+    'https://zgpboecgewijpndufpkl.supabase.co',
+    'sb_publishable_G7PJdcsoMSNoYomKjzcB8A_mjO7sJ6E'
+  );
+
+  async function initAuth() {
+    const { data: { session } } = await _sb.auth.getSession();
+    if (session) {
+      showDashboard();
+    } else {
+      document.getElementById('login-gate').classList.add('show');
+    }
+  }
+
+  async function doLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const pass  = document.getElementById('login-pass').value;
+    const btn   = document.getElementById('login-btn');
+    const err   = document.getElementById('login-error');
+    err.classList.remove('show');
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+    const { error } = await _sb.auth.signInWithPassword({ email, password: pass });
+    if (error) {
+      err.classList.add('show');
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    } else {
+      showDashboard();
+    }
+  }
+
+  function showDashboard() {
+    document.getElementById('login-gate').classList.remove('show');
+    document.getElementById('app-shell').classList.add('show');
+  }
+
+  async function doLogout() {
+    await _sb.auth.signOut();
+    document.getElementById('app-shell').classList.remove('show');
+    document.getElementById('login-gate').classList.add('show');
+    document.getElementById('login-pass').value = '';
+  }
+
+  initAuth();
+</script>
+
 <script src="script.js"></script>
 </body>
 </html>
