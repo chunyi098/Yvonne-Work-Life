@@ -2,23 +2,16 @@
 
 // ============================================================
 // SUPABASE STATE SYNC
-// _sb is initialised in index.html before this script loads.
-// All data is stored in the dashboard_state table as a single
-// JSON blob keyed by the logged-in user's id.
-// localStorage is kept as a fast local cache so the UI feels
-// instant even on slow connections.
 // ============================================================
 
 let _sbSaveTimer = null;
 
 async function sbSave(stateObj) {
-  // Always write to localStorage immediately for instant feel
   localStorage.setItem('wh_expenses', JSON.stringify(stateObj.expenses));
   localStorage.setItem('wh_meetings', JSON.stringify(stateObj.meetings));
   localStorage.setItem('wh_todos',    JSON.stringify(stateObj.todos));
   localStorage.setItem('wh_sheets',   JSON.stringify(stateObj.sheets));
 
-  // Debounce Supabase writes — save 1.5 s after the last change
   clearTimeout(_sbSaveTimer);
   _sbSaveTimer = setTimeout(async () => {
     try {
@@ -55,8 +48,7 @@ async function sbLoad() {
 }
 
 // ============================================================
-// STATE — load from localStorage first (instant), then
-// overlay with Supabase data once it arrives.
+// STATE
 // ============================================================
 let expenses = JSON.parse(localStorage.getItem('wh_expenses') || 'null');
 let meetings = JSON.parse(localStorage.getItem('wh_meetings') || 'null');
@@ -80,8 +72,6 @@ if (!todos) todos = [
   { id:4, text:'Submit Q1 report',           done:true  }
 ];
 
-// After the page renders with local data, fetch from Supabase
-// and refresh the UI if the cloud has newer data.
 async function hydrateFromSupabase() {
   const remote = await sbLoad();
   if (!remote) return;
@@ -89,12 +79,7 @@ async function hydrateFromSupabase() {
   if (remote.meetings) meetings = remote.meetings;
   if (remote.todos)    todos    = remote.todos;
   if (remote.sheets)   sheets   = remote.sheets;
-  // Re-render with cloud data
-  renderDashboard();
-  renderExpenses();
-  renderCalendar();
-  renderTodos();
-  renderSheets();
+  renderDashboard(); renderExpenses(); renderCalendar(); renderTodos(); renderSheets();
 }
 
 let expFilter             = 'all';
@@ -103,10 +88,7 @@ let calMonth              = new Date().getMonth();
 let selectedDate          = null;
 let currentReceiptDataUrl = '';
 
-function save() {
-  sbSave({ expenses, meetings, todos, sheets });
-}
-
+function save() { sbSave({ expenses, meetings, todos, sheets }); }
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function fmtDate(d) { return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }); }
 function el(id) { return document.getElementById(id); }
@@ -129,28 +111,19 @@ function initFinanceSync() {
       if (e.data && e.data.type === 'MARK_PAID') {
         const exp = expenses.find(x => String(x.id) === String(e.data.id));
         if (exp && !exp.reimbursed) {
-          exp.reimbursed = true;
-          save();
+          exp.reimbursed = true; save();
           renderDashboard(); renderExpenses();
           showFinanceBanner('\u2713 ' + exp.name + ' marked as reimbursed by finance!');
         }
       }
     };
   } catch(_) {}
-
   window.addEventListener('storage', function(e) {
     if (e.key === 'wh_expenses' && e.newValue) {
       try {
         const updated = JSON.parse(e.newValue);
-        const newlyPaid = updated.filter(u => {
-          const old = expenses.find(x => String(x.id) === String(u.id));
-          return u.reimbursed && old && !old.reimbursed;
-        });
-        if (newlyPaid.length > 0) {
-          expenses = updated;
-          renderDashboard(); renderExpenses();
-          showFinanceBanner('\u2713 ' + newlyPaid.length + ' expense' + (newlyPaid.length > 1 ? 's' : '') + ' marked as reimbursed by finance!');
-        }
+        const newlyPaid = updated.filter(u => { const old = expenses.find(x => String(x.id) === String(u.id)); return u.reimbursed && old && !old.reimbursed; });
+        if (newlyPaid.length > 0) { expenses = updated; renderDashboard(); renderExpenses(); showFinanceBanner('\u2713 ' + newlyPaid.length + ' expense' + (newlyPaid.length > 1 ? 's' : '') + ' marked as reimbursed by finance!'); }
       } catch(_) {}
     }
   });
@@ -165,12 +138,7 @@ function checkConfirmParam() {
   if (!Array.isArray(paidIds) || !paidIds.length) return;
   let count = 0;
   paidIds.forEach(id => { const e = expenses.find(x => String(x.id) === String(id)); if (e && !e.reimbursed) { e.reimbursed = true; count++; } });
-  if (count > 0) {
-    save();
-    window.history.replaceState({}, document.title, window.location.pathname);
-    showFinanceBanner('\u2713 ' + count + ' expense' + (count > 1 ? 's' : '') + ' marked as reimbursed!');
-    renderDashboard(); renderExpenses();
-  }
+  if (count > 0) { save(); window.history.replaceState({}, document.title, window.location.pathname); showFinanceBanner('\u2713 ' + count + ' expense' + (count > 1 ? 's' : '') + ' marked as reimbursed!'); renderDashboard(); renderExpenses(); }
 }
 
 // GOOGLE CALENDAR
@@ -186,124 +154,71 @@ function gcalUpdateUI() {
   else if(gcalIsConnected()){btnText.textContent='\u2713 Google Calendar connected';btn.style.background='#e8f5e9';btn.style.color='#2e7d32';if(syncBtn)syncBtn.style.display='flex';}
   else{btnText.textContent='Sign in to Google Calendar';btn.style.background='';btn.style.color='';if(syncBtn)syncBtn.style.display='none';}
 }
-function gcalToggle(){
-  if(!gcalClientId()){el('gcal-client-id-input').value=gcalClientId();el('gcal-setup-modal').classList.add('open');return;}
-  if(gcalIsConnected()){if(confirm('Disconnect Google Calendar?')){gcalToken=null;gcalTokenExp=0;gcalImported=[];gcalUpdateUI();}return;}
-  gcalSignIn();
-}
-function gcalSaveClientId(){
-  const id=el('gcal-client-id-input').value.trim();if(!id){alert('Please paste your Client ID.');return;}
-  localStorage.setItem('wh_gcal_client_id',id);el('gcal-setup-modal').classList.remove('open');gcalSignIn();
-}
-function gcalSignIn(){
-  const clientId=gcalClientId();if(!clientId){alert('Please set up your Google Client ID first.');return;}
-  if(typeof google==='undefined'||!google.accounts){alert('Google Identity Services failed to load. Please refresh.');return;}
-  const client=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:GCAL_SCOPE,callback:(resp)=>{
-    if(resp.error){alert('Google sign-in failed: '+resp.error);return;}
-    gcalToken=resp.access_token;gcalTokenExp=Date.now()+(resp.expires_in-60)*1000;gcalUpdateUI();gcalFetchEvents();
-  }});
-  client.requestAccessToken();
-}
-async function gcalFetchEvents(){
-  if(!gcalIsConnected()){gcalSignIn();return;}
-  const statusBar=el('gcal-status-bar');
-  if(statusBar){statusBar.style.display='block';statusBar.textContent='Syncing with Google Calendar...';}
-  try{
-    const now=new Date(),tMin=new Date(now.getFullYear(),now.getMonth()-1,1).toISOString(),tMax=new Date(now.getFullYear(),now.getMonth()+4,0).toISOString();
-    const resp=await fetch(GCAL_API_BASE+'/calendars/primary/events?timeMin='+encodeURIComponent(tMin)+'&timeMax='+encodeURIComponent(tMax)+'&singleEvents=true&orderBy=startTime&maxResults=200',{headers:{Authorization:'Bearer '+gcalToken}});
-    if(!resp.ok)throw new Error('HTTP '+resp.status);
-    const data=await resp.json(),existingGcalIds=new Set(meetings.filter(m=>m.gcalId).map(m=>m.gcalId));let added=0;
-    (data.items||[]).forEach(ev=>{
-      if(existingGcalIds.has(ev.id))return;const start=ev.start&&(ev.start.dateTime||ev.start.date);if(!start)return;
-      const dt=new Date(start);meetings.push({id:Date.now()+Math.random(),gcalId:ev.id,title:ev.summary||'(No title)',date:dt.toISOString().split('T')[0],time:ev.start.dateTime?String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'):'00:00',notes:ev.description||ev.location||''});added++;
-    });
-    if(added>0)save();gcalImported=(data.items||[]).map(e=>e.id);renderCalendar();renderDashboard();
-    if(statusBar){statusBar.textContent=added>0?'\u2713 Synced! '+added+' new event'+(added>1?'s':'')+' imported.':'\u2713 Up to date.';setTimeout(()=>{statusBar.style.display='none';},4000);}
-  }catch(err){
-    if(statusBar){statusBar.style.background='#fff0f0';statusBar.style.color='#cc0000';statusBar.textContent='\u26a0\ufe0f Sync failed: '+err.message;}
-    if(err.message&&err.message.includes('401')){gcalToken=null;gcalTokenExp=0;gcalUpdateUI();}
-  }
-}
-async function gcalCreateEvent(meeting){
-  if(!gcalIsConnected())return;
-  try{
-    const start=new Date(meeting.date+'T'+meeting.time+':00'),end=new Date(start.getTime()+3600000);
-    const resp=await fetch(GCAL_API_BASE+'/calendars/primary/events',{method:'POST',headers:{'Authorization':'Bearer '+gcalToken,'Content-Type':'application/json'},body:JSON.stringify({summary:meeting.title,description:meeting.notes||'',start:{dateTime:start.toISOString()},end:{dateTime:end.toISOString()}})});
-    if(resp.ok){const ev=await resp.json();const m=meetings.find(x=>x.id===meeting.id);if(m){m.gcalId=ev.id;save();}}
-  }catch(err){console.warn('GCal create failed:',err.message);}
-}
-async function gcalDeleteEvent(gcalId){
-  if(!gcalIsConnected()||!gcalId)return;
-  try{await fetch(GCAL_API_BASE+'/calendars/primary/events/'+gcalId,{method:'DELETE',headers:{'Authorization':'Bearer '+gcalToken}});}catch(err){console.warn('GCal delete failed:',err.message);}
-}
+function gcalToggle(){if(!gcalClientId()){el('gcal-client-id-input').value=gcalClientId();el('gcal-setup-modal').classList.add('open');return;}if(gcalIsConnected()){if(confirm('Disconnect Google Calendar?')){gcalToken=null;gcalTokenExp=0;gcalImported=[];gcalUpdateUI();}return;}gcalSignIn();}
+function gcalSaveClientId(){const id=el('gcal-client-id-input').value.trim();if(!id){alert('Please paste your Client ID.');return;}localStorage.setItem('wh_gcal_client_id',id);el('gcal-setup-modal').classList.remove('open');gcalSignIn();}
+function gcalSignIn(){const clientId=gcalClientId();if(!clientId){alert('Please set up your Google Client ID first.');return;}if(typeof google==='undefined'||!google.accounts){alert('Google Identity Services failed to load. Please refresh.');return;}const client=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:GCAL_SCOPE,callback:(resp)=>{if(resp.error){alert('Google sign-in failed: '+resp.error);return;}gcalToken=resp.access_token;gcalTokenExp=Date.now()+(resp.expires_in-60)*1000;gcalUpdateUI();gcalFetchEvents();}});client.requestAccessToken();}
+async function gcalFetchEvents(){if(!gcalIsConnected()){gcalSignIn();return;}const statusBar=el('gcal-status-bar');if(statusBar){statusBar.style.display='block';statusBar.textContent='Syncing with Google Calendar...';}try{const now=new Date(),tMin=new Date(now.getFullYear(),now.getMonth()-1,1).toISOString(),tMax=new Date(now.getFullYear(),now.getMonth()+4,0).toISOString();const resp=await fetch(GCAL_API_BASE+'/calendars/primary/events?timeMin='+encodeURIComponent(tMin)+'&timeMax='+encodeURIComponent(tMax)+'&singleEvents=true&orderBy=startTime&maxResults=200',{headers:{Authorization:'Bearer '+gcalToken}});if(!resp.ok)throw new Error('HTTP '+resp.status);const data=await resp.json(),existingGcalIds=new Set(meetings.filter(m=>m.gcalId).map(m=>m.gcalId));let added=0;(data.items||[]).forEach(ev=>{if(existingGcalIds.has(ev.id))return;const start=ev.start&&(ev.start.dateTime||ev.start.date);if(!start)return;const dt=new Date(start);meetings.push({id:Date.now()+Math.random(),gcalId:ev.id,title:ev.summary||'(No title)',date:dt.toISOString().split('T')[0],time:ev.start.dateTime?String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'):'00:00',notes:ev.description||ev.location||''});added++;});if(added>0)save();gcalImported=(data.items||[]).map(e=>e.id);renderCalendar();renderDashboard();if(statusBar){statusBar.textContent=added>0?'\u2713 Synced! '+added+' new event'+(added>1?'s':'')+' imported.':'\u2713 Up to date.';setTimeout(()=>{statusBar.style.display='none';},4000);}}catch(err){if(statusBar){statusBar.style.background='#fff0f0';statusBar.style.color='#cc0000';statusBar.textContent='\u26a0\ufe0f Sync failed: '+err.message;}if(err.message&&err.message.includes('401')){gcalToken=null;gcalTokenExp=0;gcalUpdateUI();}}}
+async function gcalCreateEvent(meeting){if(!gcalIsConnected())return;try{const start=new Date(meeting.date+'T'+meeting.time+':00'),end=new Date(start.getTime()+3600000);const resp=await fetch(GCAL_API_BASE+'/calendars/primary/events',{method:'POST',headers:{'Authorization':'Bearer '+gcalToken,'Content-Type':'application/json'},body:JSON.stringify({summary:meeting.title,description:meeting.notes||'',start:{dateTime:start.toISOString()},end:{dateTime:end.toISOString()}})});if(resp.ok){const ev=await resp.json();const m=meetings.find(x=>x.id===meeting.id);if(m){m.gcalId=ev.id;save();}}}catch(err){console.warn('GCal create failed:',err.message);}}
+async function gcalDeleteEvent(gcalId){if(!gcalIsConnected()||!gcalId)return;try{await fetch(GCAL_API_BASE+'/calendars/primary/events/'+gcalId,{method:'DELETE',headers:{'Authorization':'Bearer '+gcalToken}});}catch(err){console.warn('GCal delete failed:',err.message);}}
 
 // NAVIGATION
-function showPage(pageId){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  el('page-'+pageId).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(btn=>{const oc=btn.getAttribute('onclick')||'';if(oc.includes("'"+pageId+"'"))btn.classList.add('active');});
-  const map={dashboard:renderDashboard,expenses:renderExpenses,calendar:renderCalendar,todos:renderTodos,sheets:renderSheets};
-  if(map[pageId])map[pageId]();
-}
+function showPage(pageId){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));el('page-'+pageId).classList.add('active');document.querySelectorAll('.nav-item').forEach(btn=>{const oc=btn.getAttribute('onclick')||'';if(oc.includes("'"+pageId+"'"))btn.classList.add('active');});const map={dashboard:renderDashboard,expenses:renderExpenses,calendar:renderCalendar,todos:renderTodos,sheets:renderSheets};if(map[pageId])map[pageId]();}
 
 // API KEY
 function getApiKey(){return localStorage.getItem('wh_apikey')||'';}
-function updateApiKeyStatus(){const span=el('api-key-status');if(!span)return;if(getApiKey()){span.textContent='\u2713 API Key saved';span.style.color='#15803d';}else{span.textContent='Set API Key (optional)';span.style.color='';}
-}
+function updateApiKeyStatus(){const span=el('api-key-status');if(!span)return;if(getApiKey()){span.textContent='\u2713 API Key saved';span.style.color='#15803d';}else{span.textContent='Set API Key (optional)';span.style.color='';}}
 function openApiKeyModal(){el('apikey-input').value=getApiKey();el('apikey-modal').classList.add('open');}
 function closeApiKeyModal(){el('apikey-modal').classList.remove('open');}
 function saveApiKey(){const k=el('apikey-input').value.trim();if(!k){alert('Please enter your API key.');return;}if(!k.startsWith('sk-ant-')){alert('Key should start with sk-ant-');return;}localStorage.setItem('wh_apikey',k);updateApiKeyStatus();closeApiKeyModal();alert('API key saved!');}
 function clearApiKey(){if(!confirm('Remove saved API key?'))return;localStorage.removeItem('wh_apikey');el('apikey-input').value='';updateApiKeyStatus();closeApiKeyModal();}
 
 // FINANCE LINK
-function openFinanceLink(){
-  const pending=expenses.filter(e=>!e.reimbursed).map(e=>({id:e.id,name:e.name,amount:e.amount,purpose:e.purpose,date:e.date,reimbursed:false,receipt:e.receipt}));
-  if(!pending.length){alert('No pending expenses to share.');return;}
-  const base=window.location.href.split('?')[0].replace('index.html','').replace(/\/$/,'');
-  el('finance-link-text').textContent=base+'/finance.html?data='+btoa(JSON.stringify(pending));
-  el('finance-link-modal').classList.add('open');
-}
-function copyFinanceLink(){
-  const txt=el('finance-link-text').textContent;
-  navigator.clipboard.writeText(txt).then(()=>{el('finance-copy-btn').textContent='\u2713 Copied!';setTimeout(()=>{el('finance-copy-btn').textContent='Copy Link';},2000);}).catch(()=>{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);el('finance-copy-btn').textContent='\u2713 Copied!';setTimeout(()=>{el('finance-copy-btn').textContent='Copy Link';},2000);});
-}
+function openFinanceLink(){const pending=expenses.filter(e=>!e.reimbursed).map(e=>({id:e.id,name:e.name,amount:e.amount,purpose:e.purpose,date:e.date,reimbursed:false,receipt:e.receipt}));if(!pending.length){alert('No pending expenses to share.');return;}const base=window.location.href.split('?')[0].replace('index.html','').replace(/\/$/,'');el('finance-link-text').textContent=base+'/finance.html?data='+btoa(JSON.stringify(pending));el('finance-link-modal').classList.add('open');}
+function copyFinanceLink(){const txt=el('finance-link-text').textContent;navigator.clipboard.writeText(txt).then(()=>{el('finance-copy-btn').textContent='\u2713 Copied!';setTimeout(()=>{el('finance-copy-btn').textContent='Copy Link';},2000);}).catch(()=>{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);el('finance-copy-btn').textContent='\u2713 Copied!';setTimeout(()=>{el('finance-copy-btn').textContent='Copy Link';},2000);});}
 
 // DASHBOARD
-function renderDashboard(){
-  const now=new Date(),days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  el('hero-date').textContent=days[now.getDay()]+', '+months[now.getMonth()]+' '+now.getDate();
-  const td=todayStr();
-  el('dash-pending-count').textContent=expenses.filter(e=>!e.reimbursed).length;
-  el('dash-meetings-count').textContent=meetings.filter(m=>m.date===td).length;
-  const done=todos.filter(t=>t.done).length;
-  el('dash-todo-progress').textContent=done+'/'+todos.length;
-  const upcoming=[...meetings].filter(m=>m.date>=td).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,3);
-  el('dash-meetings-list').innerHTML=upcoming.length?upcoming.map(m=>'<div class="meeting-item"><div class="meeting-dot"></div><div><div class="meeting-title">'+m.title+'</div><div class="meeting-time">'+fmtDate(m.date)+' &bull; '+m.time+'</div></div></div>').join(''):'<p class="empty-hint">No upcoming meetings</p>';
-  const pct=todos.length?Math.round(done/todos.length*100):0;
-  el('dash-progress-bar').style.width=pct+'%';el('dash-progress-text').textContent=done+' of '+todos.length+' completed';el('dash-progress-pct').textContent=pct+'%';
-  el('dash-todos-preview').innerHTML=todos.slice(0,3).map(t=>'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:'+(t.done?'#999':'#1a1a1a')+'"><div style="width:8px;height:8px;border-radius:50%;background:'+(t.done?'#15803d':'#e8e8e8')+'" ></div><span style="'+(t.done?'text-decoration:line-through':'')+'">' +t.text+'</span></div>').join('');
-  el('dash-expenses-list').innerHTML=[...expenses].reverse().slice(0,3).map(e=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #eee"><div><div style="font-size:13px">'+e.name+'</div><div style="font-size:11px;color:#999">'+e.purpose+'</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:700">$'+Number(e.amount).toFixed(2)+'</div><span class="badge '+(e.reimbursed?'reimbursed':'pending')+'">'+(e.reimbursed?'Reimbursed':'Pending')+'</span></div></div>').join('');
-  el('dash-sheets-list').innerHTML=sheets.length?sheets.slice(0,3).map(s=>'<a class="sheet-item" href="'+s.url+'" target="_blank"><div class="sheet-icon"><svg width="14" height="14" fill="white" viewBox="0 0 16 16"><path d="M9 1H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V6L9 1z"/></svg></div><div class="sheet-name">'+s.name+'</div></a>').join(''):'<p class="empty-hint">No sheets linked yet</p>';
-}
+function renderDashboard(){const now=new Date(),days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],months=['January','February','March','April','May','June','July','August','September','October','November','December'];el('hero-date').textContent=days[now.getDay()]+', '+months[now.getMonth()]+' '+now.getDate();const td=todayStr();el('dash-pending-count').textContent=expenses.filter(e=>!e.reimbursed).length;el('dash-meetings-count').textContent=meetings.filter(m=>m.date===td).length;const done=todos.filter(t=>t.done).length;el('dash-todo-progress').textContent=done+'/'+todos.length;const upcoming=[...meetings].filter(m=>m.date>=td).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,3);el('dash-meetings-list').innerHTML=upcoming.length?upcoming.map(m=>'<div class="meeting-item"><div class="meeting-dot"></div><div><div class="meeting-title">'+m.title+'</div><div class="meeting-time">'+fmtDate(m.date)+' &bull; '+m.time+'</div></div></div>').join(''):'<p class="empty-hint">No upcoming meetings</p>';const pct=todos.length?Math.round(done/todos.length*100):0;el('dash-progress-bar').style.width=pct+'%';el('dash-progress-text').textContent=done+' of '+todos.length+' completed';el('dash-progress-pct').textContent=pct+'%';el('dash-todos-preview').innerHTML=todos.slice(0,3).map(t=>'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:'+(t.done?'#999':'#1a1a1a')+'"><div style="width:8px;height:8px;border-radius:50%;background:'+(t.done?'#15803d':'#e8e8e8')+'" ></div><span style="'+(t.done?'text-decoration:line-through':'')+'">'+t.text+'</span></div>').join('');el('dash-expenses-list').innerHTML=[...expenses].reverse().slice(0,3).map(e=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #eee"><div><div style="font-size:13px">'+e.name+'</div><div style="font-size:11px;color:#999">'+e.purpose+'</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:700">$'+Number(e.amount).toFixed(2)+'</div><span class="badge '+(e.reimbursed?'reimbursed':'pending')+'">'+(e.reimbursed?'Reimbursed':'Pending')+'</span></div></div>').join('');el('dash-sheets-list').innerHTML=sheets.length?sheets.slice(0,3).map(s=>'<a class="sheet-item" href="'+s.url+'" target="_blank"><div class="sheet-icon"><svg width="14" height="14" fill="white" viewBox="0 0 16 16"><path d="M9 1H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V6L9 1z"/></svg></div><div class="sheet-name">'+s.name+'</div></a>').join(''):'<p class="empty-hint">No sheets linked yet</p>';}
 
 // EXPENSES
-function renderExpenses(){
-  const pending=expenses.filter(e=>!e.reimbursed),reimb=expenses.filter(e=>e.reimbursed);
-  el('exp-total').textContent='$'+expenses.reduce((s,e)=>s+Number(e.amount),0).toFixed(2);
-  el('exp-pending-val').textContent='$'+pending.reduce((s,e)=>s+Number(e.amount),0).toFixed(2);
-  el('exp-reimbursed-val').textContent='$'+reimb.reduce((s,e)=>s+Number(e.amount),0).toFixed(2);
-  const list=expFilter==='all'?expenses:expFilter==='pending'?pending:reimb;
-  el('expense-table-body').innerHTML=list.map(e=>'<tr><td><button class="check-btn '+(e.reimbursed?'done':'')+' " onclick="toggleExp('+e.id+')" title="'+(e.reimbursed?'Mark pending':'Mark reimbursed')+'"></button></td><td>'+e.name+'</td><td>'+e.purpose+'</td><td>$'+Number(e.amount).toFixed(2)+'</td><td>'+fmtDate(e.date)+'</td><td>'+(e.receiptImg?'<img src="'+e.receiptImg+'" onclick="viewReceipt('+e.id+')" style="height:36px;width:48px;object-fit:cover;border-radius:4px;cursor:pointer;border:1px solid #eee" title="View receipt" />':(e.receipt?'<span style="font-size:11px;color:#FF3B7F">'+e.receipt+'</span>':'&mdash;'))+'</td><td><button onclick="deleteExp('+e.id+')" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:18px">&times;</button></td></tr>').join('');
-}
+function renderExpenses(){const pending=expenses.filter(e=>!e.reimbursed),reimb=expenses.filter(e=>e.reimbursed);el('exp-total').textContent='$'+expenses.reduce((s,e)=>s+Number(e.amount),0).toFixed(2);el('exp-pending-val').textContent='$'+pending.reduce((s,e)=>s+Number(e.amount),0).toFixed(2);el('exp-reimbursed-val').textContent='$'+reimb.reduce((s,e)=>s+Number(e.amount),0).toFixed(2);const list=expFilter==='all'?expenses:expFilter==='pending'?pending:reimb;el('expense-table-body').innerHTML=list.map(e=>'<tr><td><button class="check-btn '+(e.reimbursed?'done':'')+' " onclick="toggleExp('+e.id+')" title="'+(e.reimbursed?'Mark pending':'Mark reimbursed')+'"></button></td><td>'+e.name+'</td><td>'+e.purpose+'</td><td>$'+Number(e.amount).toFixed(2)+'</td><td>'+fmtDate(e.date)+'</td><td>'+(e.receiptImg?'<img src="'+e.receiptImg+'" onclick="viewReceipt('+e.id+')" style="height:36px;width:48px;object-fit:cover;border-radius:4px;cursor:pointer;border:1px solid #eee" title="View receipt" />':(e.receipt?'<span style="font-size:11px;color:#FF3B7F">'+e.receipt+'</span>':'&mdash;'))+'</td><td><button onclick="deleteExp('+e.id+')" style="background:none;border:none;cursor:pointer;color:#ccc;font-size:18px">&times;</button></td></tr>').join('');}
 function viewReceipt(id){const e=expenses.find(x=>x.id===id);if(!e||!e.receiptImg)return;const w=window.open('','_blank');w.document.write('<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+e.receiptImg+'" style="max-width:100%;max-height:100vh" /></body></html>');}
 function toggleExp(id){const e=expenses.find(x=>x.id===id);if(e)e.reimbursed=!e.reimbursed;save();renderExpenses();renderDashboard();}
 function deleteExp(id){expenses=expenses.filter(x=>x.id!==id);save();renderExpenses();renderDashboard();}
 function filterExp(f,btn){expFilter=f;document.querySelectorAll('#page-expenses .filter-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');renderExpenses();}
 function openExpenseModal(){currentReceiptDataUrl='';el('expense-modal').classList.add('open');el('exp-date').value=todayStr();resetUploadArea();el('ai-processing').classList.remove('visible');el('ai-processing').textContent='';el('ocr-progress-wrap').style.display='none';el('ocr-raw-box').style.display='none';}
 function closeExpenseModal(){el('expense-modal').classList.remove('open');['exp-name','exp-amount','exp-purpose','exp-date'].forEach(id=>el(id).value='');el('receipt-file').value='';currentReceiptDataUrl='';el('ai-processing').classList.remove('visible');el('ocr-progress-wrap').style.display='none';el('ocr-raw-box').style.display='none';resetUploadArea();}
-function resetUploadArea(){const area=el('upload-area');area.style.backgroundImage='';area.style.backgroundSize='';area.style.minHeight='';area.style.borderColor='';el('upload-icon-wrap').style.display='flex';el('upload-text').textContent='Upload Receipt';el('upload-sub-text').textContent='PNG, JPG, WEBP \u2014 auto-scanned free, no API key needed';}
+function resetUploadArea(){const area=el('upload-area');area.style.backgroundImage='';area.style.backgroundSize='';area.style.minHeight='';area.style.borderColor='';el('upload-icon-wrap').style.display='flex';el('upload-text').textContent='Upload Receipt';el('upload-sub-text').textContent='PNG, JPG, WEBP, PDF \u2014 auto-scanned free, no API key needed';}
 function saveExpense(){const name=el('exp-name').value.trim(),amount=el('exp-amount').value,purpose=el('exp-purpose').value.trim(),date=el('exp-date').value;if(!name||!amount||!purpose||!date){alert('Please fill in all fields.');return;}const file=el('receipt-file').files[0];expenses.push({id:Date.now(),name,amount:Number(amount),purpose,date,reimbursed:false,receipt:file?file.name:'',receiptImg:currentReceiptDataUrl});save();closeExpenseModal();renderExpenses();renderDashboard();}
+
+// ============================================================
+// PDF TEXT EXTRACTION via PDF.js
+// Extracts all text from every page of a PDF and returns it
+// as a single string — then feeds into parseReceiptText just
+// like Tesseract output. Works great for e-receipts, airline
+// tickets, Grab/Gojek PDFs, bank statements, invoices, etc.
+// ============================================================
+async function extractPdfText(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pages = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    // Join items with spaces; add newline between rows using y-position
+    let lastY = null;
+    const lineTexts = [];
+    for (const item of content.items) {
+      if ('str' in item) {
+        const y = item.transform ? Math.round(item.transform[5]) : 0;
+        if (lastY !== null && Math.abs(y - lastY) > 2) lineTexts.push('\n');
+        lineTexts.push(item.str);
+        lastY = y;
+      }
+    }
+    pages.push(lineTexts.join(' '));
+  }
+  return pages.join('\n');
+}
 
 // ============================================================
 // IMAGE PREPROCESSING
@@ -315,11 +230,7 @@ async function preprocessImageForOCR(dataUrl) {
       const MIN_LONG_EDGE = 1500;
       let w = img.naturalWidth, h = img.naturalHeight;
       const longEdge = Math.max(w, h);
-      if (longEdge < MIN_LONG_EDGE) {
-        const scale = MIN_LONG_EDGE / longEdge;
-        w = Math.round(w * scale);
-        h = Math.round(h * scale);
-      }
+      if (longEdge < MIN_LONG_EDGE) { const scale = MIN_LONG_EDGE / longEdge; w = Math.round(w * scale); h = Math.round(h * scale); }
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
@@ -327,10 +238,7 @@ async function preprocessImageForOCR(dataUrl) {
       const imageData = ctx.getImageData(0, 0, w, h);
       const data = imageData.data;
       const gray = new Uint8ClampedArray(w * h);
-      for (let i = 0; i < w * h; i++) {
-        const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
-        gray[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-      }
+      for (let i = 0; i < w * h; i++) { const r=data[i*4],g=data[i*4+1],b=data[i*4+2]; gray[i]=Math.round(0.299*r+0.587*g+0.114*b); }
       const borderSamples = [];
       const step = Math.max(1, Math.floor(w / 40));
       for (let x = 0; x < w; x += step) { borderSamples.push(gray[x]); borderSamples.push(gray[(h-1)*w+x]); }
@@ -340,17 +248,15 @@ async function preprocessImageForOCR(dataUrl) {
       const isDark = borderSamples[Math.floor(borderSamples.length/2)] < 100;
       if (isDark) { for (let i = 0; i < gray.length; i++) gray[i] = 255 - gray[i]; }
       const sorted = gray.slice().sort((a,b)=>a-b);
-      const lo = sorted[Math.floor(sorted.length*0.05)], hi = sorted[Math.floor(sorted.length*0.95)];
-      const range = hi - lo || 1;
+      const lo=sorted[Math.floor(sorted.length*0.05)],hi=sorted[Math.floor(sorted.length*0.95)],range=hi-lo||1;
       for (let i = 0; i < gray.length; i++) gray[i] = Math.min(255, Math.max(0, Math.round(((gray[i]-lo)/range)*255)));
-      const BLOCK = 18, BIAS = isDark ? 8 : 10;
-      const out = new Uint8ClampedArray(w * h);
+      const BLOCK=18,BIAS=isDark?8:10,out=new Uint8ClampedArray(w*h);
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const x0=Math.max(0,x-BLOCK),x1=Math.min(w-1,x+BLOCK),y0=Math.max(0,y-BLOCK),y1=Math.min(h-1,y+BLOCK);
           let sum=0,count=0;
           for (let yy=y0;yy<=y1;yy++) for (let xx=x0;xx<=x1;xx++) { sum+=gray[yy*w+xx]; count++; }
-          out[y*w+x] = gray[y*w+x] < (sum/count) - BIAS ? 0 : 255;
+          out[y*w+x] = gray[y*w+x] < (sum/count)-BIAS ? 0 : 255;
         }
       }
       for (let i = 0; i < w*h; i++) { const v=out[i]; data[i*4]=v; data[i*4+1]=v; data[i*4+2]=v; data[i*4+3]=255; }
@@ -418,7 +324,7 @@ function parseReceiptText(raw) {
   if (!amount) {
     const fxm=text.match(/1\s*([A-Z]{3})\s*[=:]\s*([\d.]+)\s*SGD/i);
     if (fxm) {
-      const fc=fxm[1].toUpperCase(), fr=parseFloat(fxm[2]);
+      const fc=fxm[1].toUpperCase(),fr=parseFloat(fxm[2]);
       const fam=text.match(new RegExp(fc+'\\s*([\\d,]+\\.\\d{2})','i'));
       if(fam&&fr>0){amount=(parseFloat(fam[1].replace(/,/g,''))*fr).toFixed(2);fxDetected=true;}
     }
@@ -426,26 +332,19 @@ function parseReceiptText(raw) {
 
   if (!amount) {
     const myr=text.match(/MYR\s*([\d,]+\.\d{2})/i);
-    const nums=[]; const re=/\b(\d{1,6}\.\d{2})\b/g; let m;
+    const nums=[];const re=/\b(\d{1,6}\.\d{2})\b/g;let m;
     while((m=re.exec(text))!==null) nums.push(parseFloat(m[1]));
-    if(myr&&nums.length){
-      const ma=parseFloat(myr[1].replace(/,/g,''));
-      const c=nums.filter(n=>n!==ma&&n>1&&n<ma);
-      if(c.length) amount=Math.max(...c).toFixed(2);
-    }
+    if(myr&&nums.length){const ma=parseFloat(myr[1].replace(/,/g,''));const c=nums.filter(n=>n!==ma&&n>1&&n<ma);if(c.length)amount=Math.max(...c).toFixed(2);}
   }
 
   if (!amount) {
     const c=[];
-    for (const ln of lines) {
-      const m=ln.match(/(?:\$|s\$|sgd|rm|myr|usd)?\s*([\d,]{1,8}\.\d{2})\s*$/i);
-      if(m){const v=parseFloat(m[1].replace(',','.'));if(v>0.01&&v<99999)c.push(v);}
-    }
+    for (const ln of lines) { const m=ln.match(/(?:\$|s\$|sgd|rm|myr|usd)?\s*([\d,]{1,8}\.\d{2})\s*$/i);if(m){const v=parseFloat(m[1].replace(',','.'));if(v>0.01&&v<99999)c.push(v);} }
     if(c.length) amount=Math.max(...c).toFixed(2);
   }
 
   if (!amount) {
-    const a=[]; const re=/\b(\d{1,6}\.\d{2})\b/g; let m;
+    const a=[];const re=/\b(\d{1,6}\.\d{2})\b/g;let m;
     while((m=re.exec(text))!==null){const v=parseFloat(m[1]);if(v>0.5&&v<99999)a.push(v);}
     if(a.length) amount=Math.max(...a).toFixed(2);
   }
@@ -463,15 +362,7 @@ function parseReceiptText(raw) {
   ];
   for (const pat of dp) {
     const m=text.match(pat);
-    if(m){
-      try{
-        let s=m[0].replace(/confirmed\s+on|completed\s+on|ordered?\s+on|placed\s+on/gi,'').trim();
-        s=s.replace(/\s+at\s+\d+:\d+\s*(am|pm)?/i,'').replace(/-/g,'/');
-        if(!/20\d{2}/.test(s)) s=s+' '+new Date().getFullYear();
-        const d=new Date(s);
-        if(!isNaN(d.getTime())&&d.getFullYear()>=2000){date=d.toISOString().split('T')[0];break;}
-      }catch(_){}
-    }
+    if(m){try{let s=m[0].replace(/confirmed\s+on|completed\s+on|ordered?\s+on|placed\s+on/gi,'').trim();s=s.replace(/\s+at\s+\d+:\d+\s*(am|pm)?/i,'').replace(/-/g,'/');if(!/20\d{2}/.test(s))s=s+' '+new Date().getFullYear();const d=new Date(s);if(!isNaN(d.getTime())&&d.getFullYear()>=2000){date=d.toISOString().split('T')[0];break;}}catch(_){}}
   }
   if(!date) date=todayStr();
 
@@ -526,13 +417,10 @@ function parseReceiptText(raw) {
   ];
 
   let name = '';
-  for (const [re, label] of brandMap) {
-    if (re.test(upper)) { name = label; break; }
-  }
+  for (const [re, label] of brandMap) { if (re.test(upper)) { name = label; break; } }
 
   if (!name) {
-    const isShopifyOrder = /ORDER\s*#\s*\d+/.test(upper) &&
-      /PREPARING.*ITEMS.*SHIPPING|BUY\s*AGAIN|ORDER\s*DISCOUNT|MASTERCARD|VISA/.test(upper);
+    const isShopifyOrder = /ORDER\s*#\s*\d+/.test(upper) && /PREPARING.*ITEMS.*SHIPPING|BUY\s*AGAIN|ORDER\s*DISCOUNT|MASTERCARD|VISA/.test(upper);
     if (isShopifyOrder) {
       for (let i = 0; i < Math.min(lines.length, 8); i++) {
         const ln = lines[i];
@@ -590,16 +478,97 @@ function parseReceiptText(raw) {
 }
 
 // ============================================================
-// RECEIPT PROCESSING
+// RECEIPT PROCESSING — routes PDF vs image
 // ============================================================
 async function processReceipt(input) {
   const file = input.files[0]; if (!file) return;
   const aiEl = el('ai-processing'), area = el('upload-area');
-  const dataUrl = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
-  currentReceiptDataUrl = dataUrl;
-  area.style.backgroundImage='url('+dataUrl+')';area.style.backgroundSize='cover';area.style.backgroundPosition='center';area.style.minHeight='120px';area.style.borderColor='#FF3B7F';
-  el('upload-icon-wrap').style.display='none';el('upload-text').textContent='\u2713 '+file.name;el('upload-sub-text').textContent='Scanning...';
-  if (getApiKey()) { await scanWithClaude(dataUrl,file,getApiKey(),aiEl); } else { await scanWithTesseract(dataUrl,file,aiEl); }
+
+  // Show file name in upload area immediately
+  area.style.borderColor = '#FF3B7F'; area.style.minHeight = '80px';
+  el('upload-icon-wrap').style.display = 'none';
+  el('upload-text').textContent = '\u2713 ' + file.name;
+  el('upload-sub-text').textContent = 'Scanning...';
+
+  if (file.type === 'application/pdf') {
+    // PDF path — no image preview, but store the dataUrl for the receipt record
+    const dataUrl = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
+    currentReceiptDataUrl = '';
+    // Show a PDF icon placeholder in the area instead of image preview
+    area.style.backgroundImage = 'none';
+    area.style.background = '#fff8fc';
+    el('upload-icon-wrap').style.display = 'flex';
+    el('upload-icon-wrap').innerHTML = '<svg width="28" height="28" viewBox="0 0 16 16" fill="#FF3B7F"><path d="M9 1H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V6L9 1zm0 1.5L13.5 7H9V2.5zM5 9h6v1H5V9zm0 2h4v1H5v-1z"/></svg>';
+    await scanPdf(file, aiEl);
+  } else {
+    // Image path — same as before
+    const dataUrl = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
+    currentReceiptDataUrl = dataUrl;
+    area.style.backgroundImage = 'url('+dataUrl+')';
+    area.style.backgroundSize = 'cover';
+    area.style.backgroundPosition = 'center';
+    area.style.minHeight = '120px';
+    if (getApiKey()) { await scanWithClaude(dataUrl,file,getApiKey(),aiEl); }
+    else { await scanWithTesseract(dataUrl,file,aiEl); }
+  }
+}
+
+// ============================================================
+// PDF SCANNER
+// Uses PDF.js to extract embedded text directly — no OCR needed
+// for digital PDFs (e-receipts, invoices). Falls back gracefully
+// with a helpful message if the PDF has no embedded text
+// (scanned/image-only PDFs).
+// ============================================================
+async function scanPdf(file, aiEl) {
+  const pw=el('ocr-progress-wrap'),bar=el('ocr-bar'),pct=el('ocr-pct'),st=el('ocr-status-text'),rb=el('ocr-raw-box'),rp=el('ocr-raw-text');
+  pw.style.display='block'; rb.style.display='none'; aiEl.classList.remove('visible');
+  bar.style.width='10%'; pct.textContent='10%'; st.textContent='Reading PDF...';
+
+  try {
+    if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js not loaded. Please refresh and try again.');
+
+    bar.style.width='40%'; pct.textContent='40%'; st.textContent='Extracting text from PDF...';
+    const rawText = await extractPdfText(file);
+
+    bar.style.width='90%'; pct.textContent='90%'; st.textContent='Parsing receipt data...';
+
+    if (!rawText || rawText.trim().length < 5) {
+      throw new Error('No text found in this PDF. It may be a scanned image — try saving it as a JPG/PNG screenshot instead.');
+    }
+
+    pw.style.display='none';
+    rp.textContent = rawText; rb.style.display = 'block';
+
+    const parsed = parseReceiptText(rawText);
+    el('exp-name').value    = parsed.name    || '';
+    el('exp-amount').value  = parsed.amount  || '';
+    el('exp-date').value    = parsed.date    || todayStr();
+    el('exp-purpose').value = parsed.purpose || '';
+    el('upload-sub-text').textContent = 'Click to change';
+
+    const filled = [parsed.name, parsed.amount].filter(Boolean).length;
+    if (filled === 2) {
+      const fx = parsed.fxDetected ? ' (converted from foreign currency \u2014 please verify)' : '';
+      aiEl.textContent = '\u2713 PDF scanned! Fields auto-filled.' + fx + ' Review and adjust if needed.';
+      aiEl.style.background = parsed.fxDetected ? '#fffbeb' : '#ecfdf5';
+      aiEl.style.color      = parsed.fxDetected ? '#b45309' : '#15803d';
+    } else if (filled === 1) {
+      aiEl.textContent = '\u26a0\ufe0f Partial fill \u2014 some fields not detected. Check raw text below.';
+      aiEl.style.background = '#fffbeb'; aiEl.style.color = '#b45309';
+    } else {
+      aiEl.textContent = '\u26a0\ufe0f Could not extract fields from this PDF. Fill in manually or try a screenshot.';
+      aiEl.style.background = '#fff0f0'; aiEl.style.color = '#cc0000';
+    }
+    aiEl.classList.add('visible');
+
+  } catch(err) {
+    pw.style.display = 'none';
+    aiEl.textContent = '\u26a0\ufe0f ' + (err.message || 'PDF scan failed.');
+    aiEl.style.background = '#fff0f0'; aiEl.style.color = '#cc0000';
+    aiEl.classList.add('visible');
+    el('upload-sub-text').textContent = 'Click to change';
+  }
 }
 
 async function scanWithTesseract(dataUrl, file, aiEl) {
@@ -612,7 +581,7 @@ async function scanWithTesseract(dataUrl, file, aiEl) {
       logger:function(info){
         if(info.status==='recognizing text'){const p=Math.round((info.progress||0)*100);bar.style.width=p+'%';pct.textContent=p+'%';st.textContent='Reading receipt... '+p+'%';}
         else if(info.status==='loading tesseract core')st.textContent='Loading OCR engine...';
-        else if(info.status==='initialising tesseract')st.textContent='Initialising OCR...';
+        else if(info.status==='initializing tesseract')st.textContent='Initialising OCR...';
         else if(info.status==='loading language traineddata')st.textContent='Loading language data...';
       },
       tessedit_pageseg_mode:'6',tessedit_ocr_engine_mode:'1',preserve_interword_spaces:'1',
@@ -625,17 +594,9 @@ async function scanWithTesseract(dataUrl, file, aiEl) {
     el('exp-name').value=parsed.name||'';el('exp-amount').value=parsed.amount||'';el('exp-date').value=parsed.date||todayStr();el('exp-purpose').value=parsed.purpose||'';
     el('upload-sub-text').textContent='Click to change';
     const filled=[parsed.name,parsed.amount].filter(Boolean).length;
-    if(filled===2){
-      const fx=parsed.fxDetected?' (converted from foreign currency \u2014 please verify)':'';
-      aiEl.textContent='\u2713 Fields auto-filled!'+fx+' Review and adjust if needed.';
-      aiEl.style.background=parsed.fxDetected?'#fffbeb':'#ecfdf5';aiEl.style.color=parsed.fxDetected?'#b45309':'#15803d';
-    } else if(filled===1){
-      aiEl.textContent='\u26a0\ufe0f Partial fill \u2014 some fields not detected. Check raw text below.';
-      aiEl.style.background='#fffbeb';aiEl.style.color='#b45309';
-    } else {
-      aiEl.textContent='\u26a0\ufe0f Could not extract fields. Try a clearer, flat photo with good lighting.';
-      aiEl.style.background='#fff0f0';aiEl.style.color='#cc0000';
-    }
+    if(filled===2){const fx=parsed.fxDetected?' (converted from foreign currency \u2014 please verify)':'';aiEl.textContent='\u2713 Fields auto-filled!'+fx+' Review and adjust if needed.';aiEl.style.background=parsed.fxDetected?'#fffbeb':'#ecfdf5';aiEl.style.color=parsed.fxDetected?'#b45309':'#15803d';}
+    else if(filled===1){aiEl.textContent='\u26a0\ufe0f Partial fill \u2014 some fields not detected. Check raw text below.';aiEl.style.background='#fffbeb';aiEl.style.color='#b45309';}
+    else{aiEl.textContent='\u26a0\ufe0f Could not extract fields. Try a clearer, flat photo with good lighting.';aiEl.style.background='#fff0f0';aiEl.style.color='#cc0000';}
     aiEl.classList.add('visible');
   } catch(err) {
     pw.style.display='none';aiEl.textContent='\u26a0\ufe0f '+(err.message||'Scan failed.');
@@ -648,7 +609,7 @@ async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
   aiEl.textContent='\ud83e\udd16 Claude AI reading receipt...';aiEl.style.background='#FFE0ED';aiEl.style.color='#CC2B66';aiEl.classList.add('visible');
   try {
     const b64=dataUrl.split(',')[1],mt=file.type||'image/png';
-    const prompt=`You are reading a receipt, order confirmation, or payment screenshot. Extract the following and return ONLY a JSON object — no extra text, no markdown.\n\nRules:\n- "name": the merchant or store name.\n- "amount": the final total in SGD as a plain number string (e.g. "71.10").\n- "date": transaction/order date in YYYY-MM-DD. If no year shown assume ${new Date().getFullYear()}.\n- "purpose": one of: Transport, Meals & Entertainment, Groceries, Office Supplies, Accommodation, Medical, Software & Subscriptions, Training & Education, Business Expense\n\nReturn exactly: {"name":"...","amount":"...","date":"...","purpose":"..."}`;
+    const prompt=`You are reading a receipt, order confirmation, or payment screenshot. Extract the following and return ONLY a JSON object — no extra text, no markdown.\n\nRules:\n- "name": the merchant or store name.\n- "amount": the final total in SGD as a plain number string (e.g. "71.10"). If foreign currency with FX rate shown, convert to SGD.\n- "date": transaction/order date in YYYY-MM-DD. If no year shown assume ${new Date().getFullYear()}.\n- "purpose": one of: Transport, Meals & Entertainment, Groceries, Office Supplies, Accommodation, Medical, Software & Subscriptions, Training & Education, Business Expense\n\nReturn exactly: {"name":"...","amount":"...","date":"...","purpose":"..."}`;
     const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:300,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:prompt}]}]})});
     if(!resp.ok){const err=await resp.json().catch(()=>({}));if(resp.status===401)throw new Error('Invalid API key.');if(resp.status===429)throw new Error('Rate limit hit.');throw new Error((err.error&&err.error.message)||'HTTP '+resp.status);}
     const data=await resp.json(),txt=(data.content||[]).map(c=>c.text||'').join('');
@@ -660,43 +621,14 @@ async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
 }
 
 // CALENDAR
-function renderCalendar(){
-  const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  el('cal-month-label').textContent=MONTHS[calMonth]+' '+calYear;
-  el('cal-headers').innerHTML=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>'<div class="cal-day-header">'+d+'</div>').join('');
-  const firstDow=new Date(calYear,calMonth,1).getDay(),startOffset=firstDow===0?6:firstDow-1,lastDate=new Date(calYear,calMonth+1,0).getDate(),td=todayStr(),meetDates=new Set(meetings.map(m=>m.date));
-  let html='';
-  for(let i=0;i<startOffset;i++)html+='<div class="cal-day other-month">'+new Date(calYear,calMonth,-startOffset+i+1).getDate()+'</div>';
-  for(let d=1;d<=lastDate;d++){const ds=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'),cls=(ds===td?' today':'')+(meetDates.has(ds)?' has-event':'');html+='<div class="cal-day'+cls+'" onclick="selectDate(\''+ds+'\')">'+d+'</div>';}
-  const endDow=new Date(calYear,calMonth,lastDate).getDay();
-  for(let i=1;i<=(endDow===0?0:7-endDow);i++)html+='<div class="cal-day other-month">'+i+'</div>';
-  el('cal-days').innerHTML=html;
-  const sorted=[...meetings].sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
-  el('all-meetings-list').innerHTML=sorted.length?sorted.map(m=>'<div class="meeting-item"><div class="meeting-dot" style="background:'+(m.gcalId?'#4285F4':'#FF3B7F')+'"></div><div style="flex:1"><div class="meeting-title">'+m.title+'</div><div class="meeting-time">'+fmtDate(m.date)+' &bull; '+m.time+(m.notes?' &mdash; '+m.notes:'')+(m.gcalId?' <span style="font-size:10px;color:#4285F4;font-weight:600">&#x2665; Google</span>':'')+'</div></div><button class="meeting-del" onclick="deleteMeeting('+m.id+')">&#10005;</button></div>').join(''):'<p class="empty-hint">No meetings yet</p>';
-}
-function selectDate(ds){
-  selectedDate=ds;el('selected-date-label').textContent=fmtDate(ds);
-  const dm=meetings.filter(m=>m.date===ds);
-  el('day-meetings').innerHTML=dm.length?dm.map(m=>'<div class="meeting-item"><div class="meeting-dot" style="background:'+(m.gcalId?'#4285F4':'#FF3B7F')+'"></div><div><div class="meeting-title">'+m.title+'</div><div class="meeting-time">'+m.time+(m.notes?' &mdash; '+m.notes:'')+'</div></div></div>').join(''):'<p class="empty-hint">No meetings on this day</p>';
-}
+function renderCalendar(){const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];el('cal-month-label').textContent=MONTHS[calMonth]+' '+calYear;el('cal-headers').innerHTML=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>'<div class="cal-day-header">'+d+'</div>').join('');const firstDow=new Date(calYear,calMonth,1).getDay(),startOffset=firstDow===0?6:firstDow-1,lastDate=new Date(calYear,calMonth+1,0).getDate(),td=todayStr(),meetDates=new Set(meetings.map(m=>m.date));let html='';for(let i=0;i<startOffset;i++)html+='<div class="cal-day other-month">'+new Date(calYear,calMonth,-startOffset+i+1).getDate()+'</div>';for(let d=1;d<=lastDate;d++){const ds=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'),cls=(ds===td?' today':'')+(meetDates.has(ds)?' has-event':'');html+='<div class="cal-day'+cls+'" onclick="selectDate(\''+ds+'\')">'+d+'</div>';}const endDow=new Date(calYear,calMonth,lastDate).getDay();for(let i=1;i<=(endDow===0?0:7-endDow);i++)html+='<div class="cal-day other-month">'+i+'</div>';el('cal-days').innerHTML=html;const sorted=[...meetings].sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));el('all-meetings-list').innerHTML=sorted.length?sorted.map(m=>'<div class="meeting-item"><div class="meeting-dot" style="background:'+(m.gcalId?'#4285F4':'#FF3B7F')+'"></div><div style="flex:1"><div class="meeting-title">'+m.title+'</div><div class="meeting-time">'+fmtDate(m.date)+' &bull; '+m.time+(m.notes?' &mdash; '+m.notes:'')+(m.gcalId?' <span style="font-size:10px;color:#4285F4;font-weight:600">&#x2665; Google</span>':'')+'</div></div><button class="meeting-del" onclick="deleteMeeting('+m.id+')">&#10005;</button></div>').join(''):'<p class="empty-hint">No meetings yet</p>';}
+function selectDate(ds){selectedDate=ds;el('selected-date-label').textContent=fmtDate(ds);const dm=meetings.filter(m=>m.date===ds);el('day-meetings').innerHTML=dm.length?dm.map(m=>'<div class="meeting-item"><div class="meeting-dot" style="background:'+(m.gcalId?'#4285F4':'#FF3B7F')+'"></div><div><div class="meeting-title">'+m.title+'</div><div class="meeting-time">'+m.time+(m.notes?' &mdash; '+m.notes:'')+'</div></div></div>').join(''):'<p class="empty-hint">No meetings on this day</p>';}
 function prevMonth(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
 function nextMonth(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
 function openMeetingModal(){el('meeting-modal').classList.add('open');if(selectedDate)el('meet-date').value=selectedDate;}
 function closeMeetingModal(){el('meeting-modal').classList.remove('open');}
-function saveMeeting(){
-  const title=el('meet-title').value.trim(),date=el('meet-date').value,time=el('meet-time').value,notes=el('meet-notes').value.trim();
-  if(!title||!date||!time){alert('Please fill in title, date and time.');return;}
-  const m={id:Date.now(),title,date,time,notes,gcalId:null};
-  meetings.push(m);save();scheduleNotifications();closeMeetingModal();
-  el('meet-title').value='';el('meet-notes').value='';
-  if(gcalIsConnected())gcalCreateEvent(m);
-  renderCalendar();renderDashboard();
-}
-function deleteMeeting(id){
-  const m=meetings.find(x=>x.id===id);
-  if(m&&m.gcalId&&gcalIsConnected())gcalDeleteEvent(m.gcalId);
-  meetings=meetings.filter(x=>x.id!==id);save();renderCalendar();renderDashboard();
-}
+function saveMeeting(){const title=el('meet-title').value.trim(),date=el('meet-date').value,time=el('meet-time').value,notes=el('meet-notes').value.trim();if(!title||!date||!time){alert('Please fill in title, date and time.');return;}const m={id:Date.now(),title,date,time,notes,gcalId:null};meetings.push(m);save();scheduleNotifications();closeMeetingModal();el('meet-title').value='';el('meet-notes').value='';if(gcalIsConnected())gcalCreateEvent(m);renderCalendar();renderDashboard();}
+function deleteMeeting(id){const m=meetings.find(x=>x.id===id);if(m&&m.gcalId&&gcalIsConnected())gcalDeleteEvent(m.gcalId);meetings=meetings.filter(x=>x.id!==id);save();renderCalendar();renderDashboard();}
 
 // NOTIFICATIONS
 function scheduleNotifications(){if(!('Notification'in window))return;Notification.requestPermission().then(perm=>{const banner=el('notif-banner');banner.style.display='block';if(perm==='granted'){banner.textContent='Notifications enabled \u2014 reminders at 7:00 AM SGT daily.';scheduleDailyCheck();}else banner.textContent='Notification permission denied.';});}
@@ -716,10 +648,7 @@ function closeSheetModal(){el('sheet-modal').classList.remove('open');}
 function saveSheet(){const name=el('sheet-name-input').value.trim(),url=el('sheet-url-input').value.trim();if(!name||!url){alert('Please fill in both fields.');return;}sheets.push({id:Date.now(),name,url});save();closeSheetModal();el('sheet-name-input').value='';el('sheet-url-input').value='';renderSheets();renderDashboard();}
 function deleteSheet(id){sheets=sheets.filter(s=>s.id!==id);save();renderSheets();renderDashboard();}
 
-// ============================================================
-// INIT — render with local data immediately, then hydrate
-// from Supabase in the background
-// ============================================================
+// INIT
 renderDashboard();
 updateApiKeyStatus();
 gcalUpdateUI();

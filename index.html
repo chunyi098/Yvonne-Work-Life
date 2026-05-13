@@ -321,9 +321,9 @@
     <div class="upload-area" id="upload-area" onclick="document.getElementById('receipt-file').click()">
       <div id="upload-icon-wrap" class="upload-icon"><svg width="20" height="20" viewBox="0 0 16 16" fill="#FF3B7F"><path d="M8 1l4 4H9v5H7V5H4l4-4zM2 12h12v2H2v-2z"/></svg></div>
       <div class="upload-text" id="upload-text">Upload Receipt</div>
-      <div class="upload-sub" id="upload-sub-text">PNG, JPG, WEBP &mdash; auto-scanned free, no API key needed</div>
+      <div class="upload-sub" id="upload-sub-text">PNG, JPG, WEBP, PDF &mdash; auto-scanned free, no API key needed</div>
     </div>
-    <input type="file" id="receipt-file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="processReceipt(this)" />
+    <input type="file" id="receipt-file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onchange="processReceipt(this)" />
     <div class="ai-processing" id="ai-processing"></div>
     <div id="ocr-progress-wrap" style="display:none;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#999;margin-bottom:4px"><span id="ocr-status-text">Reading receipt...</span><span id="ocr-pct">0%</span></div>
@@ -383,6 +383,9 @@
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<!-- PDF.js for PDF receipt text extraction -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
