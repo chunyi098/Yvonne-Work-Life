@@ -1,6 +1,63 @@
 'use strict';
 
-// STATE
+// ============================================================
+// SUPABASE STATE SYNC
+// _sb is initialised in index.html before this script loads.
+// All data is stored in the dashboard_state table as a single
+// JSON blob keyed by the logged-in user's id.
+// localStorage is kept as a fast local cache so the UI feels
+// instant even on slow connections.
+// ============================================================
+
+let _sbSaveTimer = null;
+
+async function sbSave(stateObj) {
+  // Always write to localStorage immediately for instant feel
+  localStorage.setItem('wh_expenses', JSON.stringify(stateObj.expenses));
+  localStorage.setItem('wh_meetings', JSON.stringify(stateObj.meetings));
+  localStorage.setItem('wh_todos',    JSON.stringify(stateObj.todos));
+  localStorage.setItem('wh_sheets',   JSON.stringify(stateObj.sheets));
+
+  // Debounce Supabase writes — save 1.5 s after the last change
+  clearTimeout(_sbSaveTimer);
+  _sbSaveTimer = setTimeout(async () => {
+    try {
+      if (typeof _sb === 'undefined') return;
+      const { data: { user } } = await _sb.auth.getUser();
+      if (!user) return;
+      await _sb.from('dashboard_state').upsert({
+        user_id: user.id,
+        state_data: stateObj,
+        last_updated: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    } catch (e) {
+      console.warn('Supabase save failed (using localStorage):', e.message);
+    }
+  }, 1500);
+}
+
+async function sbLoad() {
+  try {
+    if (typeof _sb === 'undefined') return null;
+    const { data: { user } } = await _sb.auth.getUser();
+    if (!user) return null;
+    const { data, error } = await _sb
+      .from('dashboard_state')
+      .select('state_data')
+      .eq('user_id', user.id)
+      .single();
+    if (error || !data) return null;
+    return data.state_data;
+  } catch (e) {
+    console.warn('Supabase load failed (using localStorage):', e.message);
+    return null;
+  }
+}
+
+// ============================================================
+// STATE — load from localStorage first (instant), then
+// overlay with Supabase data once it arrives.
+// ============================================================
 let expenses = JSON.parse(localStorage.getItem('wh_expenses') || 'null');
 let meetings = JSON.parse(localStorage.getItem('wh_meetings') || 'null');
 let todos    = JSON.parse(localStorage.getItem('wh_todos')    || 'null');
@@ -23,6 +80,23 @@ if (!todos) todos = [
   { id:4, text:'Submit Q1 report',           done:true  }
 ];
 
+// After the page renders with local data, fetch from Supabase
+// and refresh the UI if the cloud has newer data.
+async function hydrateFromSupabase() {
+  const remote = await sbLoad();
+  if (!remote) return;
+  if (remote.expenses) expenses = remote.expenses;
+  if (remote.meetings) meetings = remote.meetings;
+  if (remote.todos)    todos    = remote.todos;
+  if (remote.sheets)   sheets   = remote.sheets;
+  // Re-render with cloud data
+  renderDashboard();
+  renderExpenses();
+  renderCalendar();
+  renderTodos();
+  renderSheets();
+}
+
 let expFilter             = 'all';
 let calYear               = new Date().getFullYear();
 let calMonth              = new Date().getMonth();
@@ -30,10 +104,7 @@ let selectedDate          = null;
 let currentReceiptDataUrl = '';
 
 function save() {
-  localStorage.setItem('wh_expenses', JSON.stringify(expenses));
-  localStorage.setItem('wh_meetings', JSON.stringify(meetings));
-  localStorage.setItem('wh_todos',    JSON.stringify(todos));
-  localStorage.setItem('wh_sheets',   JSON.stringify(sheets));
+  sbSave({ expenses, meetings, todos, sheets });
 }
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
@@ -211,7 +282,7 @@ function renderDashboard(){
   el('dash-meetings-list').innerHTML=upcoming.length?upcoming.map(m=>'<div class="meeting-item"><div class="meeting-dot"></div><div><div class="meeting-title">'+m.title+'</div><div class="meeting-time">'+fmtDate(m.date)+' &bull; '+m.time+'</div></div></div>').join(''):'<p class="empty-hint">No upcoming meetings</p>';
   const pct=todos.length?Math.round(done/todos.length*100):0;
   el('dash-progress-bar').style.width=pct+'%';el('dash-progress-text').textContent=done+' of '+todos.length+' completed';el('dash-progress-pct').textContent=pct+'%';
-  el('dash-todos-preview').innerHTML=todos.slice(0,3).map(t=>'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:'+(t.done?'#999':'#1a1a1a')+'"><div style="width:8px;height:8px;border-radius:50%;background:'+(t.done?'#15803d':'#e8e8e8')+'" ></div><span style="'+(t.done?'text-decoration:line-through':'')+'">'+t.text+'</span></div>').join('');
+  el('dash-todos-preview').innerHTML=todos.slice(0,3).map(t=>'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:'+(t.done?'#999':'#1a1a1a')+'"><div style="width:8px;height:8px;border-radius:50%;background:'+(t.done?'#15803d':'#e8e8e8')+'" ></div><span style="'+(t.done?'text-decoration:line-through':'')+'">' +t.text+'</span></div>').join('');
   el('dash-expenses-list').innerHTML=[...expenses].reverse().slice(0,3).map(e=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #eee"><div><div style="font-size:13px">'+e.name+'</div><div style="font-size:11px;color:#999">'+e.purpose+'</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:700">$'+Number(e.amount).toFixed(2)+'</div><span class="badge '+(e.reimbursed?'reimbursed':'pending')+'">'+(e.reimbursed?'Reimbursed':'Pending')+'</span></div></div>').join('');
   el('dash-sheets-list').innerHTML=sheets.length?sheets.slice(0,3).map(s=>'<a class="sheet-item" href="'+s.url+'" target="_blank"><div class="sheet-icon"><svg width="14" height="14" fill="white" viewBox="0 0 16 16"><path d="M9 1H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V6L9 1z"/></svg></div><div class="sheet-name">'+s.name+'</div></a>').join(''):'<p class="empty-hint">No sheets linked yet</p>';
 }
@@ -315,7 +386,6 @@ function parseReceiptText(raw) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const upper = text.toUpperCase();
 
-  // ---- AMOUNT ----
   let amount = '', fxDetected = false;
 
   const sgdExplicit = [
@@ -380,7 +450,6 @@ function parseReceiptText(raw) {
     if(a.length) amount=Math.max(...a).toFixed(2);
   }
 
-  // ---- DATE ----
   let date = '';
   const mn='jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
   const dp=[
@@ -406,12 +475,6 @@ function parseReceiptText(raw) {
   }
   if(!date) date=todayStr();
 
-  // ---- MERCHANT NAME ----
-  // Step 1: Search full text for known brand names.
-  // This catches brand names that appear anywhere in the document,
-  // not just at the top — important for banking app screenshots where
-  // the merchant name appears in a "Merchant name" field midway down.
-
   const brandMap = [
     [/\bWISE\b/, 'Wise'],
     [/GRAB\s*(?:FOOD|MART|EXPRESS|TAXI|CAR|PAY)?/, 'Grab'],
@@ -420,17 +483,13 @@ function parseReceiptText(raw) {
     [/DELIVEROO/, 'Deliveroo'],
     [/LAZADA/, 'Lazada'],
     [/SHOPEE/, 'Shopee'],
-    // Waa Cow: logo unreadable — match unique menu items
     [/WAA\s*COW|WAACOW/, 'Waa Cow'],
     [/MENTAIKO\s+WAGYU/, 'Waa Cow'],
     [/YUZU\s+FOIE\s+GRAS/, 'Waa Cow'],
     [/ORIGINAL\s+CHIRASHI/, 'Waa Cow'],
     [/ORIGINAL\s+WAGYU\s+BEEF/, 'Waa Cow'],
-    // Soong Kee: famous KL beef noodle restaurant
     [/SOONG\s*KEE/, 'Soong Kee Beef Noodle'],
-    // Hakka Restaurant
     [/HAKKA\s*RESTAURANT/, 'Hakka Restaurant'],
-    // Standard SG brands
     [/NTUC\s*(?:FAIRPRICE)?/, 'NTUC FairPrice'],
     [/FAIRPRICE/, 'NTUC FairPrice'],
     [/COLD\s*STORAGE/, 'Cold Storage'],
@@ -471,7 +530,6 @@ function parseReceiptText(raw) {
     if (re.test(upper)) { name = label; break; }
   }
 
-  // Step 2: Shopify order fallback
   if (!name) {
     const isShopifyOrder = /ORDER\s*#\s*\d+/.test(upper) &&
       /PREPARING.*ITEMS.*SHIPPING|BUY\s*AGAIN|ORDER\s*DISCOUNT|MASTERCARD|VISA/.test(upper);
@@ -488,19 +546,14 @@ function parseReceiptText(raw) {
     }
   }
 
-  // Step 3: General fallback — first clean non-noise line.
-  // KEY FIX: skip lines that are just a currency code + amount
-  // e.g. "MYR 218.70" or "USD 45.00" — these are payment amounts,
-  // not merchant names, but they look like valid text to the noise filter.
   if (!name) {
     const skip = /^(\d[\d\s\-\/]+$|receipt|invoice|tax\s*invoice|order\s*#|tel:|phone:|fax:|gst|uen|reg\s*no|website|www\.|http|address:|thank\s*you|page\s+\d|cashier|server|table\s*\d|pos\s+|ref\s*[:#]|#\d|date[:\s]|time[:\s]|receipt\s*no|bill\s*no|invoice\s*no|trans[a-z]*\s*[:#]|merchant\s*name|transaction\s*id|fx\s*rate|completed)/i;
-    // Currency-amount line pattern: "MYR 218.70" / "USD 45.00" / "SGD 100.00"
     const isCurrencyAmtLine = /^(MYR|SGD|USD|EUR|GBP|AUD|HKD|JPY|THB|CNY|INR|IDR|PHP|VND)\s+[\d,]+\.\d{2}\s*$/i;
     for (let i = 0; i < Math.min(lines.length, 15); i++) {
       const ln = lines[i];
       if (ln.length <= 2) continue;
       if (skip.test(ln)) continue;
-      if (isCurrencyAmtLine.test(ln)) continue;   // <-- NEW: skip "MYR 218.70" lines
+      if (isCurrencyAmtLine.test(ln)) continue;
       if (/^\d+(\.\d+)?$/.test(ln)) continue;
       if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(ln)) continue;
       if (isNoiseLine(ln)) continue;
@@ -511,7 +564,6 @@ function parseReceiptText(raw) {
 
   if (!name) name = 'Receipt';
 
-  // ---- PURPOSE ----
   const pm = [
     [/grab\s*(?:car|taxi|hitch|premium|xl|exec)|gojek|uber|lyft|taxi|cab\b|car\s*hire|car\s*rental/i, 'Transport'],
     [/grab\s*food|foodpanda|deliveroo|food\s*delivery|deliver/i, 'Meals & Entertainment'],
@@ -560,7 +612,7 @@ async function scanWithTesseract(dataUrl, file, aiEl) {
       logger:function(info){
         if(info.status==='recognizing text'){const p=Math.round((info.progress||0)*100);bar.style.width=p+'%';pct.textContent=p+'%';st.textContent='Reading receipt... '+p+'%';}
         else if(info.status==='loading tesseract core')st.textContent='Loading OCR engine...';
-        else if(info.status==='initializing tesseract')st.textContent='Initialising OCR...';
+        else if(info.status==='initialising tesseract')st.textContent='Initialising OCR...';
         else if(info.status==='loading language traineddata')st.textContent='Loading language data...';
       },
       tessedit_pageseg_mode:'6',tessedit_ocr_engine_mode:'1',preserve_interword_spaces:'1',
@@ -596,18 +648,7 @@ async function scanWithClaude(dataUrl, file, apiKey, aiEl) {
   aiEl.textContent='\ud83e\udd16 Claude AI reading receipt...';aiEl.style.background='#FFE0ED';aiEl.style.color='#CC2B66';aiEl.classList.add('visible');
   try {
     const b64=dataUrl.split(',')[1],mt=file.type||'image/png';
-    const prompt=`You are reading a receipt, order confirmation, or payment screenshot. Extract the following and return ONLY a JSON object — no extra text, no markdown.
-
-Rules:
-- "name": the merchant or store name (e.g. "Grab", "Hakka Restaurant", "Soong Kee Beef Noodle", "Waa Cow"). If the logo is unclear, infer the brand from menu items or merchant name fields in the document.
-- "amount": the final total in SGD as a plain number string (e.g. "71.10").
-  * If the receipt shows SGD total explicitly, use that.
-  * If it shows a foreign currency (MYR, USD, etc.) with an FX rate to SGD, calculate and return the SGD equivalent.
-  * Use the TOTAL line — never subtotal, never a line item price.
-- "date": transaction/order date in YYYY-MM-DD. If no year shown assume ${new Date().getFullYear()}.
-- "purpose": one of: Transport, Meals & Entertainment, Groceries, Office Supplies, Accommodation, Medical, Software & Subscriptions, Training & Education, Business Expense
-
-Return exactly: {"name":"...","amount":"...","date":"...","purpose":"..."}`;
+    const prompt=`You are reading a receipt, order confirmation, or payment screenshot. Extract the following and return ONLY a JSON object — no extra text, no markdown.\n\nRules:\n- "name": the merchant or store name.\n- "amount": the final total in SGD as a plain number string (e.g. "71.10").\n- "date": transaction/order date in YYYY-MM-DD. If no year shown assume ${new Date().getFullYear()}.\n- "purpose": one of: Transport, Meals & Entertainment, Groceries, Office Supplies, Accommodation, Medical, Software & Subscriptions, Training & Education, Business Expense\n\nReturn exactly: {"name":"...","amount":"...","date":"...","purpose":"..."}`;
     const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:300,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:prompt}]}]})});
     if(!resp.ok){const err=await resp.json().catch(()=>({}));if(resp.status===401)throw new Error('Invalid API key.');if(resp.status===429)throw new Error('Rate limit hit.');throw new Error((err.error&&err.error.message)||'HTTP '+resp.status);}
     const data=await resp.json(),txt=(data.content||[]).map(c=>c.text||'').join('');
@@ -663,7 +704,7 @@ function scheduleDailyCheck(){const now=new Date(),sgt=new Date(now.toLocaleStri
 function sendDailyNotif(){const td=todayStr(),tm=meetings.filter(m=>m.date===td);const body=tm.length?'You have '+tm.length+' meeting(s) today: '+tm.map(m=>m.title+' at '+m.time).join(', '):'No meetings today \u2014 have a productive day!';if(Notification.permission==='granted')new Notification('Work Hub \u2014 Daily Briefing',{body});}
 
 // TODOS
-function renderTodos(){const done=todos.filter(t=>t.done).length,pct=todos.length?Math.round(done/todos.length*100):0;el('todo-progress-fill').style.width=pct+'%';el('todo-progress-label').textContent=done+'/'+todos.length+' completed';el('todo-list').innerHTML=todos.map(t=>'<div class="todo-item"><button class="check-btn '+(t.done?'done':'')+'\" onclick="toggleTodo('+t.id+')"></button><span class="todo-text '+(t.done?'done':'')+'">'+t.text+'</span><button class="todo-del" onclick="deleteTodo('+t.id+')">&times;</button></div>').join('');}
+function renderTodos(){const done=todos.filter(t=>t.done).length,pct=todos.length?Math.round(done/todos.length*100):0;el('todo-progress-fill').style.width=pct+'%';el('todo-progress-label').textContent=done+'/'+todos.length+' completed';el('todo-list').innerHTML=todos.map(t=>'<div class="todo-item"><button class="check-btn '+(t.done?'done':'')+'\" onclick="toggleTodo('+t.id+')"></button><span class="todo-text '+(t.done?'done':'')+'">' +t.text+'</span><button class="todo-del" onclick="deleteTodo('+t.id+')">&times;</button></div>').join('');}
 function addTodo(){const inp=el('todo-input'),txt=inp.value.trim();if(!txt)return;todos.push({id:Date.now(),text:txt,done:false});inp.value='';save();renderTodos();renderDashboard();}
 function toggleTodo(id){const t=todos.find(x=>x.id===id);if(t)t.done=!t.done;save();renderTodos();renderDashboard();}
 function deleteTodo(id){todos=todos.filter(x=>x.id!==id);save();renderTodos();renderDashboard();}
@@ -675,9 +716,13 @@ function closeSheetModal(){el('sheet-modal').classList.remove('open');}
 function saveSheet(){const name=el('sheet-name-input').value.trim(),url=el('sheet-url-input').value.trim();if(!name||!url){alert('Please fill in both fields.');return;}sheets.push({id:Date.now(),name,url});save();closeSheetModal();el('sheet-name-input').value='';el('sheet-url-input').value='';renderSheets();renderDashboard();}
 function deleteSheet(id){sheets=sheets.filter(s=>s.id!==id);save();renderSheets();renderDashboard();}
 
-// INIT
+// ============================================================
+// INIT — render with local data immediately, then hydrate
+// from Supabase in the background
+// ============================================================
 renderDashboard();
 updateApiKeyStatus();
 gcalUpdateUI();
 initFinanceSync();
 checkConfirmParam();
+hydrateFromSupabase();
