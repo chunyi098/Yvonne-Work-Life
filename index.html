@@ -252,7 +252,7 @@
 <div id="apikey-modal" class="modal-overlay" onclick="if(event.target===this)closeApiKeyModal()">
   <div class="modal">
     <div class="modal-title">API Key (optional)</div>
-    <p style="font-size:13px;color:#555;line-height:1.6;margin-bottom:8px">Receipt scanning works <strong>free with no API key</strong>. An Anthropic API key gives smarter results.</p>
+    <p style="font-size:13px;color:#555;line-height:1.6;margin-bottom:8px">Receipt scanning works <strong>free with no API key</strong> for images. An Anthropic API key enables <strong>PDF scanning</strong> and gives smarter results for all receipts.</p>
     <p style="font-size:12px;color:#999;margin-bottom:14px">Stored <strong>only in this browser</strong>, never shared.</p>
     <div class="form-group" style="margin-bottom:8px"><label class="form-label">API Key</label><input class="form-input" id="apikey-input" type="password" placeholder="sk-ant-..." /></div>
     <p style="font-size:11px;color:#bbb;margin-bottom:16px">Get one at <a href="https://console.anthropic.com" target="_blank" style="color:#FF3B7F">console.anthropic.com</a> &rarr; API Keys</p>
@@ -282,9 +282,9 @@
     <div class="upload-area" id="upload-area" onclick="document.getElementById('receipt-file').click()">
       <div id="upload-icon-wrap" class="upload-icon"><svg width="20" height="20" viewBox="0 0 16 16" fill="#FF3B7F"><path d="M8 1l4 4H9v5H7V5H4l4-4zM2 12h12v2H2v-2z"/></svg></div>
       <div class="upload-text" id="upload-text">Upload Receipt</div>
-      <div class="upload-sub" id="upload-sub-text">PNG, JPG, WEBP &mdash; auto-scanned free, no API key needed</div>
+      <div class="upload-sub" id="upload-sub-text">PNG, JPG, WEBP, PDF &mdash; auto-scanned free, no API key needed</div>
     </div>
-    <input type="file" id="receipt-file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="processReceipt(this)" />
+    <input type="file" id="receipt-file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onchange="processReceipt(this)" />
     <div class="ai-processing" id="ai-processing"></div>
     <div id="ocr-progress-wrap" style="display:none;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#999;margin-bottom:4px"><span id="ocr-status-text">Reading receipt...</span><span id="ocr-pct">0%</span></div>
